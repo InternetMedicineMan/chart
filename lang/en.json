@@ -1,0 +1,13 @@
+{
+    "payment.title": "Choose Your Plan",
+    "payment.description": "Select the perfect plan that fits your social media needs. Start with our <b>:value</b> days free trial and upgrade anytime to unlock more powerful features",
+    "payment.free-trial": ":value Days Free Trial",
+    "payment.plans.free": "Free",
+    "payment.plans.free.description": "Individuals or small businesses with moderate social media needs.",
+    "payment.plans.starter": "Starter",
+    "payment.plans.starter.description": "Individuals or small businesses with moderate social media needs.",
+    "payment.plans.pro": "Pro",
+    "payment.plans.pro.description": "Professional bloggers, influencers, or mid-sized businesses.",
+    "checkbox.terms": "I agree to the <a target='_blank' href=':terms' class='link'>Terms of Service</a> and <a target='_blank' href=':policy' class='link'>Privacy Policy</a>",
+    "Social Auth": "Social Authorization"
+}

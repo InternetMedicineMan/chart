@@ -1,0 +1,20 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "/Users/sergeykarakhanyan/Library/Application Support/Herd/bin/php83",
+            "args": [
+                "/Users/sergeykarakhanyan/Projects/larafast-vilt/artisan",
+                "boost:mcp"
+            ]
+        },
+        "herd": {
+            "command": "/Users/sergeykarakhanyan/Library/Application Support/Herd/bin/php83",
+            "args": [
+                "/Applications/Herd.app/Contents/Resources/herd-mcp.phar"
+            ],
+            "env": {
+                "SITE_PATH": "/Users/sergeykarakhanyan/Projects/larafast-vilt"
+            }
+        }
+    }
+}

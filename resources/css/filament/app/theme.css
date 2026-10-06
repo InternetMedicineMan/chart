@@ -1,0 +1,7 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+@import '../../../../node_modules/daisyui/daisyui.css';
+@import '../../../../node_modules/daisyui/themes.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+@source '../../../../resources/views/forms/**/*';
