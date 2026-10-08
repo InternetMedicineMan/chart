@@ -119,23 +119,9 @@ class CaptureActions
                     throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing it.']);
                 }
                 $user = User::findOrFail($item->user_id);
-                $references = app(CaptureReferences::class);
-                $domain = null;
-                $project = null;
-                if ($data['type'] !== 'capture_idea') {
-                    $domains = Domain::forUser($user)->whereNull('archived_at')->get();
-                    $domain = $chosenDomain
-                        ? Domain::forUser($user)->whereNull('archived_at')->findOrFail($chosenDomain)->id
-                        : $references->resolve($data['domain_ref'] ?? null, $domains, 'domain');
-                    if ($data['type'] === 'create_task') {
-                        $projects = Project::forUser($user)->where('lifecycle', 'active')->when($domain, fn ($q) => $q->where('domain_id', $domain))->get();
-                        $projectId = $chosenProject ?: $references->resolve($data['project_ref'] ?? null, $projects, 'project');
-                        $project = $projectId ? Project::forUser($user)->where('lifecycle', 'active')->lockForUpdate()->findOrFail($projectId) : null;
-                        if ($domain && $project && $domain !== $project->domain_id) {
-                            throw ValidationException::withMessages(['domain' => 'Choose the project’s domain or leave the domain blank.']);
-                        }
-                    }
-                    $domain = $project?->domain_id ?? $domain ?? app(WorkSetup::class)->inbox($user)->id;
+                [$domain, $project] = $this->targets($user, $data, $chosenDomain, $chosenProject, true);
+                if ($data['type'] !== 'capture_idea' && ! $domain) {
+                    $domain = app(WorkSetup::class)->inbox($user)->id;
                 }
                 $base = ['user_id' => $user->id, 'needs_review' => $data['confidence'] < .8];
                 $target = match ($data['type']) {
@@ -171,6 +157,49 @@ class CaptureActions
                 CaptureItem::forUser($item->user_id)->whereKey($item->id)->whereNotIn('status', ['executed', 'undone'])
                     ->update(['status' => 'failed', 'error' => 'This item could not be filed. Your words are safe; try again.']);
             }
+        }
+    }
+
+    private function targets(User $user, array $data, ?int $chosenDomain = null, ?int $chosenProject = null, bool $lock = false): array
+    {
+        $references = app(CaptureReferences::class);
+        $domain = null;
+        $project = null;
+        if ($data['type'] !== 'capture_idea') {
+            $domains = Domain::forUser($user)->whereNull('archived_at')->get();
+            $domain = $chosenDomain
+                ? Domain::forUser($user)->whereNull('archived_at')->findOrFail($chosenDomain)->id
+                : $references->resolve($data['domain_ref'] ?? null, $domains, 'domain');
+            if ($data['type'] === 'create_task') {
+                $projects = Project::forUser($user)->where('lifecycle', 'active')->when($domain, fn ($q) => $q->where('domain_id', $domain))->get();
+                $projectId = $chosenProject ?: $references->resolve($data['project_ref'] ?? null, $projects, 'project');
+                $project = $projectId ? Project::forUser($user)->where('lifecycle', 'active')->when($lock, fn ($query) => $query->lockForUpdate())->findOrFail($projectId) : null;
+                if ($domain && $project && $domain !== $project->domain_id) {
+                    throw ValidationException::withMessages(['domain' => 'Choose the project’s domain or leave the domain blank.']);
+                }
+            }
+            $domain = $project?->domain_id ?? $domain ?? Domain::forUser($user)->where('is_inbox', true)->value('id');
+        }
+
+        return [$domain, $project];
+    }
+
+    public function preview(User $user, string $text, array $action): array
+    {
+        try {
+            $data = $this->validate($action);
+            if (! str_contains($text, $data['excerpt'])) {
+                throw ValidationException::withMessages(['excerpt' => 'The excerpt does not match the original text.']);
+            }
+            if ($data['type'] === 'needs_triage' || $data['confidence'] < .6) {
+                throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing.']);
+            }
+            [$domain, $project] = $this->targets($user, $data);
+
+            return ['action' => $data, 'outcome' => $data['confidence'] < .8 ? 'would_file_with_review' : 'would_file',
+                'domain' => $domain ? Domain::forUser($user)->find($domain)?->name : null, 'project' => $project?->name, 'reason' => null];
+        } catch (ValidationException $exception) {
+            return ['action' => $action, 'outcome' => 'needs_triage', 'domain' => null, 'project' => null, 'reason' => collect($exception->errors())->flatten()->first()];
         }
     }
 

@@ -112,7 +112,10 @@ class WorkController extends Controller
 
     public function settings(Request $request, WorkOptions $options): Response
     {
-        return Inertia::render('Work/Settings', ['options' => $options->forUser($request->user())]);
+        return Inertia::render('Work/Settings', [
+            'options' => $options->forUser($request->user()),
+            'parserStatus' => ['keyConfigured' => filled(config('chart.capture.key')), 'enabled' => app(CaptureService::class)->enabled(), 'model' => config('chart.capture.model')],
+        ]);
     }
 
     public function timezone(Request $request): RedirectResponse

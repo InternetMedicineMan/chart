@@ -1,0 +1,408 @@
+{
+  "format_note": "JSON-compatible YAML to avoid requiring a production YAML package. These are synthetic examples. Expectations describe only currently supported capture actions; deferred scope features must remain in triage. API-down behavior is covered by CapturePipelineTest, not by paid model calls.",
+  "context": {
+    "timezone": "America/Chicago",
+    "client_captured_at": "2026-10-08T09:00:00-05:00",
+    "current_local_time": "2026-10-08T09:00:00-05:00",
+    "source": "in_app",
+    "mode": "single",
+    "domains": [
+      {
+        "name": "Inbox",
+        "sphere": null
+      },
+      {
+        "name": "Personal / Home",
+        "sphere": "personal"
+      },
+      {
+        "name": "Turbowebs & Clients",
+        "sphere": "work"
+      },
+      {
+        "name": "Ministry & Church",
+        "sphere": "personal"
+      }
+    ],
+    "projects": [
+      {
+        "name": "Acme website",
+        "domain": {
+          "name": "Turbowebs & Clients"
+        }
+      },
+      {
+        "name": "Church platform",
+        "domain": {
+          "name": "Ministry & Church"
+        }
+      },
+      {
+        "name": "Acme reviews",
+        "domain": {
+          "name": "Turbowebs & Clients"
+        }
+      },
+      {
+        "name": "Writing reviews",
+        "domain": {
+          "name": "Ministry & Church"
+        }
+      }
+    ],
+    "people": [
+      {
+        "name": "Mike",
+        "company": null
+      },
+      {
+        "name": "Sarah",
+        "company": null
+      },
+      {
+        "name": "Dan",
+        "company": null
+      },
+      {
+        "name": "Chris",
+        "company": null
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "inbox_task",
+      "text": "Add a task to renew the SSL cert",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "SSL",
+          "domain_ref": null,
+          "project_ref": null,
+          "due_date": null
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "reminder",
+      "text": "Remind me Friday at 3 to send Acme the invoice",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: reminders and ambiguous time"
+    },
+    {
+      "id": "waiting",
+      "text": "Waiting on Mike for the logo files, should hear by Thursday",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: waiting"
+    },
+    {
+      "id": "activity",
+      "text": "Log 45 minutes on the church platform",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: activity"
+    },
+    {
+      "id": "top_three",
+      "text": "My top three tomorrow are the report, the Acme call, and the PBE songs",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: Top 3"
+    },
+    {
+      "id": "tomorrow_focus",
+      "text": "Tomorrow's focus is shipping the capture endpoint",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: focus"
+    },
+    {
+      "id": "person_fact",
+      "text": "Talked to Sarah, her anniversary is August 12th",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: interactions and person facts"
+    },
+    {
+      "id": "book_quote",
+      "text": "Save a quote from Deep Work page 47: Focus is worth protecting.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: Library"
+    },
+    {
+      "id": "completion",
+      "text": "Wrote this week's article",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: completion and recurrence"
+    },
+    {
+      "id": "calendar",
+      "text": "Schedule lunch with Dan next Tuesday at noon",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: Calendar"
+    },
+    {
+      "id": "ambiguous_completion",
+      "text": "Mark the reviews thing done",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: completion; ambiguous reference"
+    },
+    {
+      "id": "idea",
+      "text": "Idea: a card game version of the memory verses",
+      "expected": [
+        {
+          "type": "capture_idea",
+          "body_contains": "card game"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "someday",
+      "text": "Someday I want to build a drone mapping service",
+      "expected": [
+        {
+          "type": "create_project",
+          "title_contains": "drone",
+          "lifecycle": "someday"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "brain_dump",
+      "text": "Okay, call the plumber about the leak, uh, waiting on Chris for the server quote, idea for a sermon on patience, and I need to renew the domain by the 30th, oh and Sarah's birthday is June 3rd",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "plumber"
+        },
+        {
+          "type": "needs_triage",
+          "excerpt_contains": "Chris"
+        },
+        {
+          "type": "capture_idea",
+          "body_contains": "patience"
+        },
+        {
+          "type": "create_task",
+          "title_contains": "domain",
+          "due_date": "2026-10-30"
+        },
+        {
+          "type": "needs_triage",
+          "excerpt_contains": "Sarah"
+        }
+      ],
+      "capability": "mixed: waiting and person facts deferred",
+      "context": {
+        "mode": "dump"
+      }
+    },
+    {
+      "id": "dated_task",
+      "text": "Add a task to send the invoice for Acme website on Friday at 15:00.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "invoice",
+          "project_ref": "Acme website",
+          "due_date": "2026-10-09",
+          "due_time": "15:00"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "unframed_thought",
+      "text": "A quieter room might make it easier to write.",
+      "expected": [
+        {
+          "type": "capture_idea",
+          "body_contains": "quieter"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "active_project",
+      "text": "Start a new project now: Build the garden shed, under Personal / Home.",
+      "expected": [
+        {
+          "type": "create_project",
+          "title_contains": "shed",
+          "lifecycle": "active",
+          "domain_ref": "Personal / Home"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "weekend",
+      "text": "Add a task to clean the garage this weekend.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "garage",
+          "due_date": "2026-10-10"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "evening_timezone",
+      "text": "Add a task to buy milk tomorrow.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "milk",
+          "due_date": "2026-10-09"
+        }
+      ],
+      "capability": "implemented",
+      "context": {
+        "client_captured_at": "2026-10-08T20:30:00-05:00",
+        "current_local_time": "2026-10-09T08:00:00-05:00"
+      }
+    },
+    {
+      "id": "spring_dst",
+      "text": "Add a task to buy milk tomorrow.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "milk",
+          "due_date": "2026-03-08"
+        }
+      ],
+      "capability": "implemented",
+      "context": {
+        "client_captured_at": "2026-03-07T23:30:00-06:00",
+        "current_local_time": "2026-03-08T09:00:00-05:00"
+      }
+    },
+    {
+      "id": "fall_dst",
+      "text": "Add a task to buy milk tomorrow.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "milk",
+          "due_date": "2026-11-01"
+        }
+      ],
+      "capability": "implemented",
+      "context": {
+        "client_captured_at": "2026-10-31T23:30:00-05:00",
+        "current_local_time": "2026-11-01T09:00:00-06:00"
+      }
+    },
+    {
+      "id": "five_items",
+      "text": "Call the plumber. Buy milk. Idea: a blue notebook. Someday build a greenhouse. Add a task to pay the water bill.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "plumber"
+        },
+        {
+          "type": "create_task",
+          "title_contains": "milk"
+        },
+        {
+          "type": "capture_idea",
+          "body_contains": "blue"
+        },
+        {
+          "type": "create_project",
+          "title_contains": "greenhouse",
+          "lifecycle": "someday"
+        },
+        {
+          "type": "create_task",
+          "title_contains": "water"
+        }
+      ],
+      "capability": "implemented",
+      "context": {
+        "mode": "dump"
+      }
+    },
+    {
+      "id": "repeat_in_dump",
+      "text": "Call the plumber. Also call the plumber.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "plumber"
+        }
+      ],
+      "capability": "implemented",
+      "context": {
+        "mode": "dump"
+      }
+    },
+    {
+      "id": "ambiguous_date",
+      "text": "Add a task to call Mike on the 32nd.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "ambiguous: invalid date"
+    },
+    {
+      "id": "no_invented_deadline",
+      "text": "Add a task to buy a new kettle. There is no deadline.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "kettle",
+          "due_date": null,
+          "due_time": null
+        }
+      ],
+      "capability": "implemented"
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
+use App\Http\Controllers\ParserPreviewController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\WorkController;
@@ -31,6 +32,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::get('/ideas', [WorkController::class, 'ideas'])->name('ideas');
         Route::get('/more', fn () => Inertia::render('Work/More'))->name('more');
         Route::get('/settings/work', [WorkController::class, 'settings'])->name('work.settings');
+        Route::post('/settings/parser/preview', ParserPreviewController::class)->middleware('throttle:5,1')->name('parser.preview');
         Route::put('/settings/timezone', [WorkController::class, 'timezone'])->name('work.timezone');
         Route::post('/domains', [DomainController::class, 'store'])->name('domains.store');
         Route::put('/domains/{domain}', [DomainController::class, 'update'])->name('domains.update');

@@ -766,7 +766,7 @@ Don't wait for the app to start clearing your head.
 ### 9.6 Parser Test Bench
 
 - `tests/parser/fixtures.yaml` holds utterances with their expected actions (see Appendix B).
-- `php artisan parser:eval` runs the fixtures against the live model and reports the differences.
+- `php artisan parser:eval --live` runs the fixtures against the live model and reports the differences. Without `--live`, list the cases without API calls; `--case=<id>` limits a run and `--model=<id>` compares a model without changing app configuration.
 - The Settings page has a "try an utterance" box with a dry run (nothing gets executed).
 - Run the eval before changing the prompt.
 - A unit test asserts **every action in the executor's enum appears in the prompt text** (Section 9.3), so the two can't drift.

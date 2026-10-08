@@ -47,7 +47,24 @@ Activation/deployment:
 4. Ensure Forge runs `php artisan schedule:run` every minute. `capture:recover` redispatches due/interrupted captures; it can also be run manually. Refresh production config and restart workers after environment/code changes (`php artisan config:cache`, `php artisan queue:restart`).
 5. Evaluate real Appendix B examples before accepting model quality. Until then, local storage/execution/recovery are verified, but live classification, cost, latency and account access are not.
 
-Still open in capture checkpoint 3: scoped watch tokens and `/api/capture?wait=1`, Shortcut setup/device tests, `capture:import`, live `parser:eval`/dry-run interface, full notifications feed/push, cold offline capture launch, and the remaining Phase 1 actions as their underlying records become available. Undo currently lives with each capture outcome. The full never-lose/device acceptance gate is not yet complete.
+Still open in capture checkpoint 3: scoped watch tokens and `/api/capture?wait=1`, Shortcut setup/device tests, `capture:import`, live parser quality acceptance, full notifications feed/push, cold offline capture launch, and the remaining Phase 1 actions as their underlying records become available. Undo currently lives with each capture outcome. The full never-lose/device acceptance gate is not yet complete.
+
+## Parser test bench — October 8, 2026
+
+Settings now has a capture preview that makes one explicit API request and shows proposed filing, Check-this flags, or triage without creating captures or work records. It uses the same parser context, transcript coverage checks, validation and owned-reference resolver as real capture. It works while automatic sorting is disabled, requires owner login and confirmed 2FA, and is limited to five requests per minute. Preview text/results are not stored in Chart. Provider errors distinguish missing keys, authentication, model access, billing, throttling, connection failures and unusable responses without exposing provider messages or credentials.
+
+`php artisan chart:ai-check` reports configuration presence without printing secrets or contacting OpenAI. It cannot establish worker health, account billing, or model availability.
+
+`tests/parser/fixtures.yaml` contains 25 synthetic cases in JSON-compatible YAML: Appendix B starters, mixed/five-item dumps, repetition, ambiguous dates, invented-deadline protection, local evening dates and both DST transitions. The grader checks classification, specified fields, confidence and transcript coverage. Actual owned-reference resolution is exercised by preview feature tests. Deferred capabilities currently expect triage; those cases passing would not establish full Phase 1 acceptance.
+
+- `php artisan parser:eval` lists cases without requests.
+- `php artisan parser:eval --case=inbox_task --live` makes one controlled live request.
+- `php artisan parser:eval --live` runs all cases; `--model=<id>` overrides only that run.
+- Reports include model, prompt/fixture hashes, differences, duration and token usage in private `storage/app/private/parser-evals/` files. Evaluation uses only synthetic context and never writes work records. Provider failures stop the run; unattempted cases are counted separately.
+
+The owner configured a local API key. Two single-case live attempts returned HTTP 429; safe error inspection identified billing/credits language. No usable model response was received, so model access, quality, latency and cost remain unverified. API billing must be resolved before rerunning the controlled case and then the fixture set. Automatic sorting remains disabled and production deployment/worker setup remains pending.
+
+Verification: 99 PHP tests passed (751 assertions), with 17 existing disabled starter-feature skips; four service-worker checks, client/SSR builds, Pint, route-cache compilation/clear and diff checks passed. An isolated browser account verified missing-key messaging, text entry, disabled request submission and desktop/390px phone layout with no page errors. The initial resize check caught an in-progress sidebar transition; after waiting for the transition, the phone content had no horizontal overflow. No owner work records were changed by these checks.
 
 ## Initial audit
 
