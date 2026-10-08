@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
+use PragmaRX\Google2FA\Google2FA;
 use Tests\TestCase;
 
 class ChartAccessTest extends TestCase
@@ -91,6 +92,33 @@ class ChartAccessTest extends TestCase
         $this->post('/two-factor-challenge', ['recovery_code' => 'recovery-code-one'])->assertRedirect('/dashboard');
         $this->assertAuthenticatedAs($owner);
         $this->assertNotContains('recovery-code-one', $owner->fresh()->recoveryCodes());
+    }
+
+    public function test_authenticator_code_completes_login_and_opens_chart(): void
+    {
+        $secret = 'JBSWY3DPEHPK3PXP';
+        $owner = User::factory()->create([
+            'two_factor_secret' => encrypt($secret),
+            'two_factor_confirmed_at' => now(),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-one'])),
+        ]);
+
+        $this->post('/login', ['email' => $owner->email, 'password' => 'password', 'remember' => true])
+            ->assertRedirect('/two-factor-challenge');
+        $this->get('/two-factor-challenge')->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Auth/TwoFactorChallenge'));
+        $this->assertGuest();
+
+        $this->post('/two-factor-challenge', ['code' => 'invalid'])
+            ->assertSessionHasErrors('code');
+        $this->assertGuest();
+
+        $this->post('/two-factor-challenge', ['code' => (new Google2FA)->getCurrentOtp($secret)])
+            ->assertRedirect('/dashboard');
+        $this->assertAuthenticatedAs($owner);
+        $this->get('/dashboard')->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Dashboard'));
+        $this->assertSame(['recovery-code-one'], $owner->fresh()->recoveryCodes());
     }
 
     public function test_retired_starter_routes_are_unavailable_to_guests_and_owner(): void

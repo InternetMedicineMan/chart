@@ -6,13 +6,19 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The approved owner account has been provisioned locally. Tasks, domains and capture have not been implemented yet.
+Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
-Owner setup remaining: from the repository, run `php artisan chart:owner jason.diehl@turbowebs.com --set-password`, then sign in and complete the authenticator/recovery-code setup. The command prompts privately; no password belongs in source control or chat. Local `CHART_OWNER_ID` is configured; production must configure its own owner ID after provisioning.
+Minimal work records implemented October 8, 2026: owned domains and system Inbox, projects and lifecycle, tasks with due dates/times and priority, completion/reopening, soft deletion/recovery, ideas and Someday projects, minimal people storage for upcoming waits, and timezone settings. Bench, project detail, manual Intake, Ideas and work settings are available with desktop/sidebar and phone/bottom navigation. The initial Briefing shows capped due/overdue tasks and real counts. It does not yet include Top 3, cadence states, waits, Calendar or observations.
+
+The owner approved Appendix A domains with Ministry under Personal. `php artisan chart:setup` initializes them idempotently without resetting edits or re-creating deleted starter domains. The new migration and setup have been applied to local MySQL. Production still needs the new code, `php artisan migrate --force`, `php artisan chart:setup`, built assets and refreshed route/config caches.
+
+Production auth recovery: rebuilding configuration/restarting PHP fixed stale owner settings. The subsequent 2FA failure was an invalid MAC on the stored secret; re-enrolling the owner on production fixed it. Keep production's APP_KEY stable across releases. `chart:owner <email> --check` now reports owner/account alignment without changing credentials.
 
 Validation: 42 PHP tests passed (220 assertions); 17 optional starter tests skipped because their features are disabled. Four service-worker privacy/fallback tests passed. Client and SSR production builds succeeded, route cache compiled successfully, and PHP formatting/diff checks passed. Browser verification covered the actual landing/login and an isolated test owner's two-factor/recovery login, phone navigation, settings and persistent desktop sidebar collapse. The preview database is separate from the real account.
 
-Remaining foundation acceptance: owner password/2FA enrollment, real iPhone installation (including HTTPS hosting), Android install if available, and production configuration. The service worker currently caches only static assets and a non-sensitive fallback; offline capture is not implemented. No domain tables or live-data migrations were added in this slice.
+Work-record validation: 59 PHP tests passed (472 assertions), with the same 17 disabled starter-feature skips. Client/SSR builds, route-cache compilation, Pint and diff checks passed. The migration also ran successfully on local MySQL. An isolated browser account verified quick task entry, project creation, Inbox-to-project movement, completion/reopening, idea saving and the mobile More menu. A phone-width Bench search overflow was found and fixed; the verified content width is 390px at a 390px viewport. Screenshots were saved outside the repository, and preview data was not added to the owner's database.
+
+Remaining foundation acceptance: real iPhone installation, Android install if available, and deployment of the work-record checkpoint. The service worker currently caches only static assets and a non-sensitive fallback; offline capture is not implemented. Manual task/idea entry requires a network connection; it is not the AI capture pipeline and does not claim its never-lose guarantee yet.
 
 ## Initial audit
 
@@ -81,7 +87,7 @@ Rounds and Vitals describe review and state information; they do not need extra 
 - [x] Force tests onto an isolated in-memory SQLite database, confirm the frontend/SSR builds, and adapt starter tests to private single-owner access.
 - [x] Remove registration GET/POST and social/magic account-creation routes. Disable unused public routes, billing webhooks, the admin panel, and public profile-photo handling.
 - [x] Provision the owner securely without committed credentials and replace the demo seeder. Owner password/2FA setup remains a user step.
-- [ ] Seed the system Inbox and agreed domains with the minimal work records checkpoint.
+- [x] Seed the system Inbox and agreed domains with the minimal work records checkpoint.
 - [x] Enforce owner authorization and confirmed 2FA on operational routes, with a restricted enrollment/recovery path to avoid lockout.
 - [x] Build the simple landing page, focused login and persistent sidebar/bottom-navigation layout.
 - [x] Add manifest, root-scoped service worker, static offline fallback and icons. Start the installed app at the authenticated Briefing route; login redirects back there.
@@ -90,9 +96,9 @@ Acceptance: login works for the owner, signup and alternate account-creation URL
 
 ### 2. Minimal work records
 
-- [ ] Add owned domains, system Inbox, projects, basic tasks, minimal people for waits, ideas and daily settings.
-- [ ] Implement basic create/edit/complete/move flows and valid domain/project relationships. Keep setup fields behind Edit.
-- [ ] Add the shared timezone helper, ownership policies/scopes and basic local-date tests.
+- [x] Add owned domains, system Inbox, projects, basic tasks, minimal people for waits, ideas and timezone settings. Daily plans/Top 3 remain in checkpoint 4.
+- [x] Implement basic create/edit/complete/move flows and valid domain/project relationships. Keep setup fields behind Edit. Deleted tasks can be restored; project moves also update deleted tasks so restored work stays in its project domain.
+- [x] Add the shared timezone helper, owner-scoped reads/writes and local-date tests, including both daylight-saving transitions.
 
 Acceptance: a task can be created, assigned to a valid project/domain, completed and recovered without cross-owner access; the Inbox cannot be deleted. This is the smallest data foundation needed to make capture useful.
 

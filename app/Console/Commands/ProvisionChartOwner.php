@@ -10,7 +10,7 @@ use Illuminate\Validation\Rules\Password;
 
 class ProvisionChartOwner extends Command
 {
-    protected $signature = 'chart:owner {email : The owner email address} {--name= : Name for a new account} {--create-locked : Create with an unknown random password for later setup} {--set-password : Set the password interactively}';
+    protected $signature = 'chart:owner {email : The owner email address} {--name= : Name for a new account} {--create-locked : Create with an unknown random password for later setup} {--set-password : Set the password interactively} {--check : Check owner configuration without changing the account}';
 
     protected $description = 'Provision or identify the Chart owner without changing an existing password';
 
@@ -25,7 +25,12 @@ class ProvisionChartOwner extends Command
         }
 
         $user = User::query()->where('email', $email)->first();
+        if ($this->option('check')) {
+            return $this->reportReadiness($user) ? self::SUCCESS : self::FAILURE;
+        }
+
         if (config('chart.owner_id') && (! $user || (string) $user->id !== (string) config('chart.owner_id'))) {
+            $this->reportReadiness($user);
             $this->error('Chart already has a configured owner. Change the owner configuration explicitly to transfer access.');
 
             return self::FAILURE;
@@ -73,13 +78,42 @@ class ProvisionChartOwner extends Command
             } else {
                 $user = User::create(['name' => $name, 'email' => $email, 'password' => $password, 'email_verified_at' => now()]);
             }
-            $this->info('Password set. Complete two-factor setup after signing in.');
+            $this->info('Password saved in this environment.');
         } elseif (! $createdLocked) {
             $this->info('Existing account preserved, including its password and two-factor settings.');
         }
 
-        $this->line('Set CHART_OWNER_ID='.$user->id.' in your environment, then run php artisan config:clear.');
+        $this->reportReadiness($user);
 
         return self::SUCCESS;
+    }
+
+    private function reportReadiness(?User $user): bool
+    {
+        $ownerId = config('chart.owner_id');
+        $this->line('Environment: '.app()->environment().' ('.config('app.url').')');
+        $this->line('Configured CHART_OWNER_ID: '.($ownerId ?: '(not set)'));
+
+        if (! $user) {
+            $this->error('This email has no account in this environment. Local and deployed databases are separate.');
+
+            return false;
+        }
+
+        $this->line('Account ID in this database: '.$user->id);
+        if (! $ownerId || (string) $user->id !== (string) $ownerId) {
+            $this->error('Sign-in is blocked by the owner configuration, regardless of the password.');
+            $this->line('Set CHART_OWNER_ID='.$user->id.' in this server\'s environment, then run php artisan config:clear.');
+            $this->line('If deployment caches configuration, rebuild it with php artisan config:cache.');
+
+            return false;
+        }
+
+        $this->info('Owner configuration matches this account.');
+        if (! $user->hasEnabledTwoFactorAuthentication()) {
+            $this->line('After signing in, enable two-factor authentication and confirm the code on Settings to unlock Chart.');
+        }
+
+        return true;
     }
 }

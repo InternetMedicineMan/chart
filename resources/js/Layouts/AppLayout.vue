@@ -3,12 +3,21 @@ import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ArrowLeftStartOnRectangleIcon, Bars3Icon, ChevronDoubleLeftIcon } from '@heroicons/vue/24/outline';
 import ChartBrand from '@/Components/ChartBrand.vue';
-import { navigation } from '@/navigation';
+import { navigation, mobileNavigation } from '@/navigation';
 
 const page = usePage();
 const collapsed = ref(false);
-const current = computed(() => page.url.startsWith('/user/') ? 'profile.show' : 'dashboard');
-const title = computed(() => current.value === 'profile.show' ? 'Settings' : 'Chart');
+const current = computed(() => {
+    const path = page.url.split('?')[0];
+    if (path.startsWith('/user/') || path.startsWith('/settings/')) return 'profile.show';
+    if (path.startsWith('/bench') || path.startsWith('/projects/')) return 'bench';
+    if (path === '/intake') return 'intake';
+    if (path === '/ideas') return 'ideas';
+    if (path === '/more') return 'more';
+    return 'dashboard';
+});
+const mobileCurrent = computed(() => ['profile.show', 'ideas'].includes(current.value) ? 'more' : current.value);
+const title = computed(() => [...navigation, ...mobileNavigation].find(item => item.route === current.value)?.label || 'Chart');
 const logout = () => router.post(route('logout'));
 </script>
 
@@ -38,12 +47,12 @@ const logout = () => router.post(route('logout'));
             <header class="app-header flex items-center justify-between border-b border-base-300 bg-base-100/90 px-5 py-5 sm:px-9">
                 <div class="flex items-center gap-3"><ChartBrand compact class="md:hidden" /><div><p class="text-xs text-base-content/45">Personal operations</p><h1 class="text-lg font-semibold">{{ title }}</h1></div></div>
                 <button aria-label="Sign out" class="btn btn-ghost min-h-11 md:hidden" @click="logout"><ArrowLeftStartOnRectangleIcon class="h-5 w-5" /></button>
-                <span class="hidden text-xs text-base-content/45 md:block">Your private workspace</span>
+                <Link v-if="page.props.auth.user.two_factor_confirmed_at" :href="route('intake')" class="btn btn-primary hidden rounded-xl md:inline-flex">+ Add something</Link>
             </header>
-            <main id="main-content" tabindex="-1" class="app-content mx-auto max-w-6xl px-5 py-8 sm:px-9 sm:py-10"><slot /></main>
+            <main id="main-content" tabindex="-1" class="app-content mx-auto max-w-6xl px-5 py-8 sm:px-9 sm:py-10"><div v-if="page.props.message" role="status" class="mb-6 rounded-xl border border-success/20 bg-success/5 px-4 py-3 text-sm text-success">{{ page.props.message }}</div><slot /></main>
         </div>
         <nav aria-label="Mobile navigation" class="bottom-navigation fixed inset-x-0 bottom-0 z-30 flex justify-evenly border-t border-base-300 bg-base-100 md:hidden">
-            <Link v-for="item in navigation" :key="item.route" :href="route(item.route)" :aria-current="current === item.route ? 'page' : undefined" class="flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium" :class="current === item.route ? 'text-primary' : 'text-base-content/50'"><component :is="item.icon" class="h-6 w-6" />{{ item.label }}</Link>
+            <Link v-for="item in mobileNavigation" :key="item.route" :href="route(item.route)" :aria-current="mobileCurrent === item.route ? 'page' : undefined" class="flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium" :class="mobileCurrent === item.route ? 'text-primary' : 'text-base-content/50'"><component :is="item.icon" class="h-6 w-6" />{{ item.label }}</Link>
         </nav>
     </div>
 </template>

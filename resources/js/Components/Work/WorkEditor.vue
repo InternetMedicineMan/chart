@@ -1,0 +1,63 @@
+<script setup>
+import { computed, onMounted, ref } from 'vue';
+import { useForm } from '@inertiajs/vue3';
+
+const props = defineProps({ kind: String, record: Object, options: Object, domainId: [String, Number], projectId: [String, Number] });
+const emit = defineEmits(['close']);
+const dialog = ref(null);
+const item = props.record || {};
+const form = useForm(props.kind === 'task' ? {
+    title: item.title || '', notes: item.notes || '', domain_id: item.domain_id || props.domainId || '',
+    project_id: item.project_id || props.projectId || '', priority: item.priority || 4,
+    due_date: item.due_date || '', due_time: item.due_time?.slice(0, 5) || '',
+} : props.kind === 'project' ? {
+    name: item.name || '', description: item.description || '', domain_id: item.domain_id || props.domainId || '',
+    type: item.type || 'target_date', lifecycle: item.lifecycle || 'active', target_date: item.target_date || '',
+    cadence_days: item.cadence_days ?? '', quiet_enabled: item.quiet_enabled ?? true,
+} : props.kind === 'domain' ? {
+    name: item.name || '', description: item.description || '', sphere: item.sphere || 'personal',
+    cadence_days: item.cadence_days ?? '', quiet_enabled: item.quiet_enabled ?? true, parked: item.parked ?? false,
+} : { body: item.body || '' });
+const title = computed(() => `${item.id ? 'Edit' : 'New'} ${props.kind}`);
+const close = () => { if (!form.processing) emit('close'); };
+const submit = () => {
+    const names = { task: 'tasks', project: 'projects', domain: 'domains', idea: 'ideas' };
+    form[item.id ? 'put' : 'post'](route(`${names[props.kind]}.${item.id ? 'update' : 'store'}`, item.id), {
+        preserveScroll: true, onSuccess: () => emit('close'),
+    });
+};
+const removeTask = () => form.delete(route('tasks.destroy', item.id), { preserveScroll: true, onSuccess: () => emit('close') });
+onMounted(() => dialog.value.showModal());
+</script>
+
+<template>
+    <dialog ref="dialog" class="work-dialog" aria-labelledby="editor-title" @cancel.prevent="close" @click="event => { if (event.target === dialog) close(); }">
+        <form class="p-6 sm:p-8" @submit.prevent="submit">
+            <div class="mb-6 flex items-center justify-between gap-4"><h2 id="editor-title" class="text-xl font-semibold">{{ title }}</h2><button type="button" class="btn btn-ghost btn-sm min-h-11" aria-label="Close editor" :disabled="form.processing" @click="close">Close</button></div>
+            <div v-if="Object.keys(form.errors).length" role="alert" class="mb-5 rounded-xl bg-error/10 p-4 text-sm text-error"><p v-for="(error, field) in form.errors" :key="field">{{ error }}</p></div>
+            <div class="space-y-5">
+                <label v-if="kind === 'idea'" class="work-label">Thought<textarea v-model="form.body" class="work-input min-h-40" required maxlength="20000" autofocus /></label>
+                <template v-else>
+                    <label class="work-label">{{ kind === 'task' ? 'Task' : 'Name' }}<input v-if="kind === 'task'" v-model="form.title" class="work-input" required maxlength="255" autofocus /><input v-else v-model="form.name" class="work-input" required maxlength="100" autofocus /></label>
+                    <label class="work-label">{{ kind === 'task' ? 'Notes' : 'Description' }}<textarea v-if="kind === 'task'" v-model="form.notes" class="work-input min-h-24" maxlength="20000" /><textarea v-else v-model="form.description" class="work-input min-h-24" maxlength="10000" /></label>
+                    <label v-if="kind === 'task'" class="work-label">Project<select v-model="form.project_id" class="work-input"><option value="">No project</option><option v-for="project in options.projects" :key="project.id" :value="project.id">{{ project.name }}{{ project.lifecycle !== 'active' ? ` (${project.lifecycle})` : '' }}</option></select></label>
+                    <label v-if="kind !== 'domain' && !form.project_id" class="work-label">Domain<select v-model="form.domain_id" class="work-input" :required="kind === 'project'"><option value="">{{ kind === 'task' ? 'Inbox' : 'Choose a domain' }}</option><option v-for="domain in options.domains" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
+                    <p v-if="kind === 'task' && form.project_id" class="text-sm text-base-content/60">Filed under the project’s domain.</p>
+                    <template v-if="kind === 'task'">
+                        <div class="grid grid-cols-2 gap-4"><label class="work-label">Due date<input v-model="form.due_date" type="date" class="work-input" /></label><label class="work-label">Due time<input v-model="form.due_time" type="time" class="work-input" /></label></div>
+                        <p class="text-xs text-base-content/55">Times use {{ options.timezone }}.</p>
+                        <label class="work-label">Priority<select v-model="form.priority" class="work-input"><option :value="4">Low</option><option :value="3">Normal</option><option :value="2">High</option><option :value="1">Urgent</option></select></label>
+                    </template>
+                    <template v-if="kind === 'project'">
+                        <label class="work-label">Type<select v-model="form.type" class="work-input"><option value="target_date">Finite outcome</option><option value="ongoing">Ongoing engagement</option></select></label>
+                        <label class="work-label">Lifecycle<select v-model="form.lifecycle" class="work-input"><option value="active">Active</option><option value="someday">Someday</option><option value="parked">Parked</option><option value="done">Done</option><option value="dropped">Dropped</option></select></label>
+                        <label class="work-label">Target date<input v-model="form.target_date" type="date" class="work-input" /></label>
+                    </template>
+                    <template v-if="kind === 'domain'"><label class="work-label">Sphere<select v-model="form.sphere" class="work-input"><option value="personal">Personal</option><option value="work">Work</option></select></label><label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="form.parked" type="checkbox" class="checkbox checkbox-sm" /> Park this domain</label></template>
+                    <template v-if="kind !== 'task'"><label class="work-label">Cadence in days <span class="font-normal text-base-content/50">Optional</span><input v-model="form.cadence_days" type="number" min="1" max="3650" class="work-input" /></label><label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="form.quiet_enabled" type="checkbox" class="checkbox checkbox-sm" /> Track quiet time</label></template>
+                </template>
+            </div>
+            <div class="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-5"><button v-if="kind === 'task' && item.id" type="button" class="btn btn-ghost mr-auto text-error" :disabled="form.processing" @click="removeTask">Delete task</button><button type="button" class="btn btn-ghost" :disabled="form.processing" @click="close">Cancel</button><button class="btn btn-primary rounded-xl" :disabled="form.processing">{{ form.processing ? 'Saving…' : 'Save' }}</button></div>
+        </form>
+    </dialog>
+</template>

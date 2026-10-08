@@ -968,6 +968,7 @@ First steps:
 | D24 | Minimal Chart identity page at `/` with one sign-in link; no registration or public data | Owner approved October 7, 2026. Preserve a simple entrance without a marketing site | If redirecting `/` directly to login becomes preferable |
 | D25 | Approved C/chart icon; persistent desktop sidebar and mobile bottom navigation | Owner approved icon and implementation checklist October 7, 2026 | After real-device use |
 | D26 | Owner identity is configured by user ID; only that account may authenticate or use an existing session | Prevent other starter/demo accounts from accessing Chart; existing real accounts are preserved | If single-user scope changes |
+| D27 | Use Appendix A starter domains, with Ministry & Church under Personal | Owner confirmed October 8, 2026; domains remain editable in Settings | After real use |
 
 ---
 

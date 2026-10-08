@@ -1,0 +1,114 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\AppSetting;
+use App\Models\Note;
+use App\Models\Project;
+use App\Models\Task;
+use App\Services\LocalDate;
+use App\Services\WorkOptions;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class WorkController extends Controller
+{
+    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates): Response
+    {
+        $user = $request->user();
+        $due = Task::forUser($user)->whereNull('completed_at')->whereDate('due_date', '<=', $dates->today($user))
+            ->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('parked', false)->whereNull('archived_at'))
+            ->where(fn (Builder $query) => $query->whereNull('project_id')->orWhereHas('project', fn (Builder $query) => $query->forUser($user)->where('lifecycle', 'active')));
+
+        return Inertia::render('Dashboard', [
+            'options' => $options->forUser($user),
+            'dueCount' => (clone $due)->count(),
+            'dueTasks' => $due->with(['project', 'domain'])->orderBy('due_date')->orderBy('priority')->orderBy('id')->limit(7)->get(),
+            'inboxCount' => Task::forUser($user)->whereNull('completed_at')->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('is_inbox', true))->count(),
+            'ideaCount' => Note::forUser($user)->where('kind', 'thought')->count(),
+            'projectCount' => Project::forUser($user)->where('lifecycle', 'active')->count(),
+        ]);
+    }
+
+    public function bench(Request $request, WorkOptions $options): Response
+    {
+        $filters = $request->validate([
+            'sphere' => ['nullable', Rule::in(['personal', 'work'])],
+            'domain' => ['nullable', 'integer'],
+            'status' => ['nullable', Rule::in(['open', 'completed', 'trash'])],
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+        $tasks = Task::forUser($request->user())->with(['domain', 'project']);
+        $projects = Project::forUser($request->user())->where('lifecycle', '!=', 'someday')->with('domain')
+            ->withCount(['tasks as open_tasks_count' => fn (Builder $query) => $query->forUser($request->user())->whereNull('completed_at')]);
+        foreach ([$tasks, $projects] as $query) {
+            $query->when($filters['domain'] ?? null, fn (Builder $q, $id) => $q->where('domain_id', $id))
+                ->when($filters['sphere'] ?? null, fn (Builder $q, $sphere) => $q->whereHas('domain', fn (Builder $domain) => $domain->forUser($request->user())->where('sphere', $sphere)));
+        }
+        $tasks->when($filters['q'] ?? null, fn (Builder $q, $text) => $q->where('title', 'like', '%'.$text.'%'));
+        $projects->when($filters['q'] ?? null, fn (Builder $q, $text) => $q->where('name', 'like', '%'.$text.'%'));
+        match ($filters['status'] ?? 'open') {
+            'completed' => $tasks->whereNotNull('completed_at'),
+            'trash' => $tasks->onlyTrashed(),
+            default => $tasks->whereNull('completed_at'),
+        };
+
+        return Inertia::render('Work/Bench', [
+            'options' => $options->forUser($request->user()), 'filters' => $filters,
+            'projects' => $projects->orderBy('name')->paginate(12, ['*'], 'projects_page')->withQueryString(),
+            'tasks' => $tasks->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString(),
+        ]);
+    }
+
+    public function project(Request $request, int $project, WorkOptions $options): Response
+    {
+        $record = Project::forUser($request->user())->with('domain')->withCount([
+            'tasks as open_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNull('completed_at'),
+            'tasks as completed_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNotNull('completed_at'),
+        ])->findOrFail($project);
+        $filters = $request->validate(['status' => ['nullable', Rule::in(['open', 'completed'])]]);
+
+        return Inertia::render('Work/Project', [
+            'project' => $record, 'options' => $options->forUser($request->user()), 'filters' => $filters,
+            'tasks' => Task::forUser($request->user())->where('project_id', $record->id)
+                ->when(($filters['status'] ?? 'open') === 'completed', fn (Builder $q) => $q->whereNotNull('completed_at'), fn (Builder $q) => $q->whereNull('completed_at'))
+                ->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString(),
+        ]);
+    }
+
+    public function intake(Request $request, WorkOptions $options): Response
+    {
+        return Inertia::render('Work/Intake', [
+            'options' => $options->forUser($request->user()),
+            'tasks' => Task::forUser($request->user())->whereNull('completed_at')
+                ->whereHas('domain', fn (Builder $q) => $q->forUser($request->user())->where('is_inbox', true))
+                ->with('project')->orderByDesc('id')->paginate(20),
+        ]);
+    }
+
+    public function ideas(Request $request, WorkOptions $options): Response
+    {
+        return Inertia::render('Work/Ideas', [
+            'options' => $options->forUser($request->user()),
+            'ideas' => Note::forUser($request->user())->where('kind', 'thought')->latest('id')->paginate(20)->withQueryString(),
+            'someday' => Project::forUser($request->user())->where('lifecycle', 'someday')->with('domain')->latest('id')->paginate(12, ['*'], 'someday_page')->withQueryString(),
+        ]);
+    }
+
+    public function settings(Request $request, WorkOptions $options): Response
+    {
+        return Inertia::render('Work/Settings', ['options' => $options->forUser($request->user())]);
+    }
+
+    public function timezone(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['timezone' => ['required', 'timezone']]);
+        AppSetting::forUser($request->user())->updateOrCreate(['key' => 'timezone'], ['user_id' => $request->user()->id, 'value' => $data['timezone']]);
+
+        return back()->with('message', 'Timezone updated.');
+    }
+}
