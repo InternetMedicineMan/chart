@@ -7,8 +7,10 @@ use App\Http\Requests\SaveProjectRequest;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProjectController extends Controller
 {
@@ -34,5 +36,33 @@ class ProjectController extends Controller
         });
 
         return back()->with('message', 'Project updated.');
+    }
+
+    public function destroy(Request $request, int $project): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $project) {
+            $record = Project::withTrashed()->forUser($request->user())->lockForUpdate()->findOrFail($project);
+            if ($record->trashed()) {
+                return;
+            }
+            if ($record->tasks()->withTrashed()->exists()) {
+                throw ValidationException::withMessages(['project' => 'Move this project’s tasks to another project or choose No project first. Tasks in Recently deleted must be restored and moved too.']);
+            }
+            $record->delete();
+        });
+
+        return to_route('bench', ['project_status' => 'trash'])->with('message', 'Project moved to Recently deleted.');
+    }
+
+    public function restore(Request $request, int $project): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $project) {
+            $record = Project::withTrashed()->forUser($request->user())->lockForUpdate()->findOrFail($project);
+            if ($record->trashed()) {
+                $record->restore();
+            }
+        });
+
+        return back()->with('message', 'Project restored. Someday projects return to Ideas.');
     }
 }

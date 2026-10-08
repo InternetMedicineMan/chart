@@ -44,11 +44,17 @@ class WorkController extends Controller
             'sphere' => ['nullable', Rule::in(['personal', 'work'])],
             'domain' => ['nullable', 'integer'],
             'status' => ['nullable', Rule::in(['open', 'completed', 'trash'])],
+            'project_status' => ['nullable', Rule::in(['current', 'trash'])],
             'q' => ['nullable', 'string', 'max:100'],
         ]);
         $tasks = Task::forUser($request->user())->with(['domain', 'project']);
-        $projects = Project::forUser($request->user())->where('lifecycle', '!=', 'someday')->with('domain')
+        $projects = Project::forUser($request->user())->with('domain')
             ->withCount(['tasks as open_tasks_count' => fn (Builder $query) => $query->forUser($request->user())->whereNull('completed_at')]);
+        if (($filters['project_status'] ?? 'current') === 'trash') {
+            $projects->onlyTrashed();
+        } else {
+            $projects->where('lifecycle', '!=', 'someday');
+        }
         foreach ([$tasks, $projects] as $query) {
             $query->when($filters['domain'] ?? null, fn (Builder $q, $id) => $q->where('domain_id', $id))
                 ->when($filters['sphere'] ?? null, fn (Builder $q, $sphere) => $q->whereHas('domain', fn (Builder $domain) => $domain->forUser($request->user())->where('sphere', $sphere)));

@@ -43,6 +43,8 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
         Route::get('/projects/{project}', [WorkController::class, 'project'])->name('projects.show');
         Route::put('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
+        Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
+        Route::post('/projects/{project}/restore', [ProjectController::class, 'restore'])->name('projects.restore');
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::patch('/tasks/{task}/completion', [TaskController::class, 'completion'])->name('tasks.completion');

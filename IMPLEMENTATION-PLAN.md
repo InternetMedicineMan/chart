@@ -196,6 +196,14 @@ Keep the existing AI settings and stable APP_KEY. In the **production** app, ope
 
 First verify one harmless online capture appears exactly once in Intake. Then check local file retention in airplane mode, reconnect and replay the unchanged file, and confirm no duplicate appears. Test Brain Dump next. Only after these pass, adapt the Shortcut for a separate Watch token and verify its available actions/connectivity. The new slice is not deployed by this local implementation.
 
+## Project deletion and recovery — October 8, 2026
+
+Project → Edit now includes Delete project with an explicit confirmation. Deletion uses the existing soft-delete column; no migration is required. Bench has a separate Project view → Recently deleted filter, with restore controls. Restoring preserves the project's original details and lifecycle, so Someday projects return to Ideas. Project trash respects ownership, domain/sphere/search filters and pagination independently of the task view.
+
+Projects containing any tasks, including completed or soft-deleted tasks, cannot be deleted. Move their tasks first; restore deleted tasks before moving them. The delete transaction locks the project, matching manual and capture task creation so deletion cannot race a new assignment. Repeated delete/restore requests are harmless, and deleted projects cannot receive new tasks. No owner records were deleted during implementation. Capture-created test projects can also still be removed through Intake → capture → Undo filing within seven days, provided they have not changed or acquired tasks.
+
+Validation: 50 relevant work-record, access-boundary and capture-pipeline tests passed (670 assertions). Client/SSR builds, route-cache compilation/clear, Pint and diff checks passed. An isolated browser account created a Someday project, cancelled and confirmed deletion, restored it to Ideas, and repeated deletion/restoration at 390px without overflow or page errors. Deploy source/built assets through the normal Forge flow and refresh the route cache before these controls appear in production.
+
 ## Initial audit
 
 | Area | Finding | Treatment |

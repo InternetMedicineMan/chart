@@ -5,6 +5,7 @@ import { useForm } from '@inertiajs/vue3';
 const props = defineProps({ kind: String, record: Object, options: Object, domainId: [String, Number], projectId: [String, Number] });
 const emit = defineEmits(['close']);
 const dialog = ref(null);
+const confirmingDelete = ref(false);
 const item = props.record || {};
 const form = useForm(props.kind === 'task' ? {
     title: item.title || '', notes: item.notes || '', domain_id: item.domain_id || props.domainId || '',
@@ -27,6 +28,7 @@ const submit = () => {
     });
 };
 const removeTask = () => form.delete(route('tasks.destroy', item.id), { preserveScroll: true, onSuccess: () => emit('close') });
+const removeProject = () => form.delete(route('projects.destroy', item.id), { onSuccess: () => emit('close') });
 onMounted(() => dialog.value.showModal());
 </script>
 
@@ -57,7 +59,12 @@ onMounted(() => dialog.value.showModal());
                     <template v-if="kind !== 'task'"><label class="work-label">Cadence in days <span class="font-normal text-base-content/50">Optional</span><input v-model="form.cadence_days" type="number" min="1" max="3650" class="work-input" /></label><label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="form.quiet_enabled" type="checkbox" class="checkbox checkbox-sm" /> Track quiet time</label></template>
                 </template>
             </div>
-            <div class="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-5"><button v-if="kind === 'task' && item.id" type="button" class="btn btn-ghost mr-auto text-error" :disabled="form.processing" @click="removeTask">Delete task</button><button type="button" class="btn btn-ghost" :disabled="form.processing" @click="close">Cancel</button><button class="btn btn-primary rounded-xl" :disabled="form.processing">{{ form.processing ? 'Saving…' : 'Save' }}</button></div>
+            <div v-if="confirmingDelete" class="mt-6 rounded-xl border border-error/20 bg-error/5 p-4">
+                <p class="text-sm font-semibold">Move this project to Recently deleted?</p>
+                <p class="mt-2 text-sm text-base-content/65">You can restore it from Bench → Projects → Recently deleted. Projects containing tasks must have those tasks moved first.</p>
+                <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="btn btn-error rounded-xl" :disabled="form.processing" @click="removeProject">Move to Recently deleted</button><button type="button" class="btn btn-ghost" :disabled="form.processing" @click="confirmingDelete = false">Keep project</button></div>
+            </div>
+            <div class="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-5"><button v-if="kind === 'task' && item.id" type="button" class="btn btn-ghost mr-auto text-error" :disabled="form.processing" @click="removeTask">Delete task</button><button v-if="kind === 'project' && item.id && !confirmingDelete" type="button" class="btn btn-ghost mr-auto text-error" :disabled="form.processing" @click="confirmingDelete = true">Delete project</button><button type="button" class="btn btn-ghost" :disabled="form.processing" @click="close">Cancel</button><button v-if="!confirmingDelete" class="btn btn-primary rounded-xl" :disabled="form.processing">{{ form.processing ? 'Saving…' : 'Save' }}</button></div>
         </form>
     </dialog>
 </template>

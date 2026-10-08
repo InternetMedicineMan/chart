@@ -138,6 +138,8 @@ class WorkRecordsTest extends TestCase
         $task = $this->task(['user_id' => $other->id, 'domain_id' => $domain->id, 'project_id' => $project->id]);
         $idea = Note::create(['user_id' => $other->id, 'body' => 'Private thought']);
         $this->get('/projects/'.$project->id)->assertNotFound();
+        $this->delete('/projects/'.$project->id)->assertNotFound();
+        $this->post('/projects/'.$project->id.'/restore')->assertNotFound();
         $this->put('/tasks/'.$task->id, ['title' => 'Changed'])->assertNotFound();
         $this->patch('/tasks/'.$task->id.'/completion', ['completed' => true])->assertNotFound();
         $this->delete('/tasks/'.$task->id)->assertNotFound();
@@ -150,6 +152,56 @@ class WorkRecordsTest extends TestCase
         $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->has('ideas.data', 0));
     }
 
+    public function test_someday_project_can_be_deleted_and_restored_without_changing_its_details(): void
+    {
+        $project = $this->project(['name' => 'Test possibility', 'description' => 'Keep these original details', 'lifecycle' => 'someday']);
+        $this->delete('/projects/'.$project->id)->assertRedirect(route('bench', ['project_status' => 'trash']));
+        $this->delete('/projects/'.$project->id)->assertSessionHasNoErrors();
+        $this->assertSoftDeleted($project);
+        $this->get('/projects/'.$project->id)->assertNotFound();
+        $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->has('someday.data', 0)->has('options.projects', 0));
+        $this->get('/bench?project_status=trash')->assertInertia(fn (Assert $page) => $page->has('projects.data', 1)->where('projects.data.0.id', $project->id));
+        $this->post('/tasks', ['title' => 'Cannot add here', 'project_id' => $project->id])->assertSessionHasErrors('project_id');
+        $this->post('/projects/'.$project->id.'/restore')->assertSessionHasNoErrors();
+        $this->post('/projects/'.$project->id.'/restore')->assertSessionHasNoErrors();
+        $this->assertNotSoftDeleted($project);
+        $this->assertSame('someday', $project->fresh()->lifecycle->value);
+        $this->assertSame('Keep these original details', $project->fresh()->description);
+        $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->has('someday.data', 1)->where('someday.data.0.id', $project->id));
+        $this->get('/bench?project_status=trash')->assertInertia(fn (Assert $page) => $page->has('projects.data', 0));
+    }
+
+    public function test_project_deletion_preserves_open_completed_and_deleted_tasks(): void
+    {
+        foreach (['open', 'completed', 'deleted'] as $status) {
+            $project = $this->project();
+            $task = $this->task(['project_id' => $project->id, 'completed_at' => $status === 'completed' ? now() : null]);
+            if ($status === 'deleted') {
+                $task->delete();
+            }
+            $before = $task->fresh()->getRawOriginal();
+            $this->delete('/projects/'.$project->id)->assertSessionHasErrors('project');
+            $this->assertNotSoftDeleted($project);
+            $this->assertSame($before, $task->fresh()->getRawOriginal());
+        }
+    }
+
+    public function test_deleted_project_listing_is_owned_filterable_and_separate_from_task_trash(): void
+    {
+        $removed = $this->project(['name' => 'Garden test', 'lifecycle' => 'someday']);
+        $removed->delete();
+        $this->project(['name' => 'Still active']);
+        $other = User::factory()->create();
+        $foreign = $this->project(['user_id' => $other->id, 'name' => 'Garden private']);
+        $foreign->delete();
+        $this->task();
+        $this->get('/bench?project_status=trash&q=Garden')->assertInertia(fn (Assert $page) => $page->has('projects.data', 1)->where('projects.data.0.id', $removed->id)->has('options.projects', 1));
+        $this->get('/bench?project_status=trash&domain='.$this->domain('family')->id)->assertInertia(fn (Assert $page) => $page->has('projects.data', 0));
+        $this->get('/bench?project_status=trash')->assertInertia(fn (Assert $page) => $page->has('projects.data', 1)->has('tasks.data', 1));
+        $this->delete('/projects/'.$foreign->id)->assertNotFound();
+        $this->post('/projects/'.$foreign->id.'/restore')->assertNotFound();
+    }
+
     public function test_new_pages_and_writes_require_owner_and_two_factor(): void
     {
         $this->owner->forceFill(['two_factor_confirmed_at' => null])->save();
@@ -157,6 +209,8 @@ class WorkRecordsTest extends TestCase
             $this->get($path)->assertRedirect('/user/profile');
         }
         $this->post('/tasks', ['title' => 'Blocked'])->assertRedirect('/user/profile');
+        $this->deleteJson('/projects/1')->assertForbidden();
+        $this->postJson('/projects/1/restore')->assertForbidden();
         $this->assertDatabaseCount('tasks', 0);
         $this->post('/logout');
         $this->get('/bench')->assertRedirect('/login');
