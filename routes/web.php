@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CaptureController;
+use App\Http\Controllers\CaptureTokenController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
 use App\Http\Controllers\ParserPreviewController;
@@ -32,6 +33,8 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::get('/ideas', [WorkController::class, 'ideas'])->name('ideas');
         Route::get('/more', fn () => Inertia::render('Work/More'))->name('more');
         Route::get('/settings/work', [WorkController::class, 'settings'])->name('work.settings');
+        Route::post('/settings/capture-tokens', [CaptureTokenController::class, 'store'])->middleware('throttle:5,1')->name('capture-tokens.store');
+        Route::delete('/settings/capture-tokens/{token}', [CaptureTokenController::class, 'destroy'])->name('capture-tokens.destroy');
         Route::post('/settings/parser/preview', ParserPreviewController::class)->middleware('throttle:5,1')->name('parser.preview');
         Route::put('/settings/timezone', [WorkController::class, 'timezone'])->name('work.timezone');
         Route::post('/domains', [DomainController::class, 'store'])->name('domains.store');

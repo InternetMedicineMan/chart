@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
 use App\Models\Capture;
+use App\Models\CaptureToken;
 use App\Models\Note;
 use App\Models\Project;
 use App\Models\Task;
@@ -114,6 +115,8 @@ class WorkController extends Controller
     {
         return Inertia::render('Work/Settings', [
             'options' => $options->forUser($request->user()),
+            'captureTokens' => CaptureToken::forUser($request->user())->latest('id')->get(['id', 'label', 'device_name', 'rate_limit_per_hour', 'last_used_at', 'revoked_at', 'created_at']),
+            'captureEndpoint' => route('capture.api', ['wait' => 1]),
             'parserStatus' => ['keyConfigured' => filled(config('chart.capture.key')), 'enabled' => app(CaptureService::class)->enabled(), 'model' => config('chart.capture.model')],
         ]);
     }

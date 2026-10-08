@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\AuthenticateCapture;
 use App\Http\Middleware\EnsureChartOwner;
 use App\Http\Middleware\RequireTwoFactorAuthentication;
 use App\Models\User;
@@ -21,6 +22,13 @@ class ChartAccessTest extends TestCase
         $actual = [];
         foreach (Route::getRoutes() as $route) {
             $middleware = $route->gatherMiddleware();
+            if ($route->getName() === 'capture.api') {
+                $this->assertContains(AuthenticateCapture::class, $middleware);
+                $this->assertSame('api/capture', $route->uri());
+                $this->assertSame(['POST'], $route->methods());
+
+                continue;
+            }
             if (in_array('auth', $middleware, true) || in_array('auth:web', $middleware, true)) {
                 $this->assertContains(EnsureChartOwner::class, $middleware, $route->uri());
 

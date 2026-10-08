@@ -20,6 +20,7 @@ class CaptureService
     {
         $capture = Capture::forUser($user)->firstOrCreate(['request_key' => $data['request_key']], [
             'user_id' => $user->id, 'raw_text' => $data['text'], 'source' => $data['source'] ?? 'in_app',
+            'device_label' => $data['device_label'] ?? null, 'capture_token_id' => $data['capture_token_id'] ?? null,
             'mode' => ($data['mode'] ?? 'single') === 'dump' || count(preg_split('/\s+/u', trim($data['text']))) > 60 ? 'dump' : 'single',
             'client_captured_at' => CarbonImmutable::parse($data['captured_at'])->utc(),
             'timezone' => app(LocalDate::class)->timezone($user), 'available_at' => now(),
@@ -116,7 +117,7 @@ class CaptureService
         $filed = $statuses->filter(fn ($status) => $status === 'executed')->count();
         $review = $statuses->diff(['executed', 'undone'])->count();
         $message = $capture->fallback_task_id && ! $capture->parsed ? 'Saved to Inbox. Automatic sorting needs attention.' : 'Saved. Sorting it now.';
-        if ($statuses->isNotEmpty()) {
+        if ($statuses->isNotEmpty() && ! $statuses->contains('pending')) {
             $message = "Saved. {$filed} filed".($review ? "; {$review} need review." : '.');
         }
 

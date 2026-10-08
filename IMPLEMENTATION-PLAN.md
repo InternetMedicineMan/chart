@@ -160,6 +160,38 @@ The owner requested settings and commands to apply manually; production has not 
 
 Deployment should continue running migrations, asset builds, config/route cache refreshes and `queue:restart` when new code is released. Production activation is complete only after the owner confirms these live checks on the deployed site.
 
+## Device capture API and iPhone setup — October 8, 2026
+
+The owner reports the previous Forge worker/scheduler rollout looks good. This is owner-confirmed production status, not direct server inspection. The next device test is **iPhone first, then Apple Watch**.
+
+Implemented locally:
+
+- `POST /api/capture` accepts a dedicated bearer capture token or the existing owner session. Tokens are 64 random characters plus a prefix, SHA-256 hashed in the database, write-only, owner-bound, and rejected if revoked or if the owner no longer has confirmed 2FA. Session requests retain the standard cookie/session/password-hash and request-forgery checks. This one endpoint has its own authentication boundary; other private/package routes stay behind owner login.
+- Settings → Devices & Shortcuts creates and revokes tokens, shows device names and last accepted use, and reveals the secret only in the creation response. The plaintext is not stored in Inertia props/history, session flash, database, or browser storage. Capture details show their device label. A token grants no read or account-management access.
+- Capture input accepts `text`, `source` (`ios`, `watch`, `mac`, `android`, `in_app`, `offline_queue`), optional `device_label`, ISO-8601 `captured_at` with timezone, UUID `request_key`, and `mode` (`single` or `dump`). Incoming words use the existing save-first queue and recovery path. Sources for email/audio integrations remain deferred.
+- Stable request IDs are namespaced to the token. Without an explicit ID, the token, normalized capture timestamp and text hash identify retries. Without both an ID and a timestamp, each submission is new. Reusing an ID with different words or a different time is rejected. Token rotation changes the deduplication namespace: check Intake before replaying files created under an old token.
+- `?wait=1` polls for at most an eight-second application wait budget; sorting remains in the queue. Completed results return current factual counts; unfinished work says “Saved. Sorting it now.” Pending execution is not mislabeled as a review decision. Every accepted response is HTTP 202. API successes/errors are JSON and no-store. Limits are 60 requests/minute per IP at the API boundary, 30/minute per owner, and 120/hour per token (including retries).
+- Settings includes manual action-by-action guides for Chart It, Brain Dump, and Send Outbox. The iPhone guide saves an unchanged JSON file to an On My iPhone folder **before** making the request, then deletes only that file after a response with a capture ID. This avoids depending on an error handler after a failed Shortcuts network action. It is a setup guide, not an installed or signed Shortcut. [Apple web API guidance](https://support.apple.com/guide/shortcuts/apd2d448b2de/ios) and [Watch guidance](https://support.apple.com/en-ie/guide/shortcuts-mac/apd5888b0858/mac) informed the setup.
+
+Verification: **116 PHP tests passed (891 assertions)**, with 17 existing disabled-feature skips; four service-worker privacy checks passed. Client/SSR builds, route-cache compilation/clear, Pint and diff checks passed. API tests cover real database-queue execution with a controlled model response, normalized retry identities, changed payload rejection, scope/owner/2FA/CSRF boundaries, revocation, rate limits, and bounded wait/completion/fallback responses. An isolated browser account verified owner/2FA login, token creation/hiding/reload privacy, cookie-free bearer capture, retries, revocation, device provenance and desktop/390px layouts without page errors. No paid API requests were needed for this slice and verification records stayed out of the real owner database.
+
+The migration ran on local MySQL. The local capture worker was restarted with current code; the existing scheduler remains running. Real iPhone Shortcuts action names, file permissions, airplane-mode dictation/storage and replay must still be checked on the device. The iPhone's local folder cannot serve as a shared Watch outbox. Watch connectivity/offline testing, an installable Shortcut artifact, push notifications, and `capture:import` remain open; do not treat this as completion of the full never-lose capture gate.
+
+### Deploy this slice, then test on iPhone
+
+Use the existing Forge release flow to deploy this code and build assets (`npm ci`, `npm run build` where the deployment normally builds). No new dependencies, API keys, worker definitions or scheduler entries are needed. Run the migration before activating the new release, then refresh caches and restart the supervised worker:
+
+```sh
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan queue:restart
+```
+
+Keep the existing AI settings and stable APP_KEY. In the **production** app, open Settings → Devices & Shortcuts and create an iPhone token. Local and production tokens are separate; do not send a local token to production. Use the production URL shown there (`https://chart.internetmedicineman.com/api/capture?wait=1`) and follow the expanded Chart It and Send Outbox instructions. Keep the token out of chat and out of shared Shortcuts.
+
+First verify one harmless online capture appears exactly once in Intake. Then check local file retention in airplane mode, reconnect and replay the unchanged file, and confirm no duplicate appears. Test Brain Dump next. Only after these pass, adapt the Shortcut for a separate Watch token and verify its available actions/connectivity. The new slice is not deployed by this local implementation.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -244,13 +276,16 @@ Acceptance: a task can be created, assigned to a valid project/domain, completed
 
 ### 3. Reliable capture as early as possible
 
-- [ ] Add raw captures, items, hashed scoped capture tokens, action logs and notification/undo records.
-- [x] Persist incoming words and their idempotency key before dispatching any AI job; recover if job dispatch itself fails after the save. Session capture is implemented; token capture follows.
-- [ ] Configure Redis queues/Horizon and retries. Return a quick `202`, with a bounded `?wait=1` path and factual server-derived confirmation.
-- [x] Build parser context, action schema, reference resolver and executor from one action registry. Initially advertise tasks, ideas, projects and explicit triage; retain unsupported material for review. Live model evaluation remains pending.
+- [x] Add raw captures, items, hashed scoped capture tokens and action logs with per-item undo.
+- [ ] Add the full notification feed and its undo records.
+- [x] Persist session/device capture words and their idempotency key before dispatching any AI job; recover if job dispatch itself fails after the save.
+- [x] Return a quick `202`, with a bounded `?wait=1` path and factual server-derived confirmation, using the existing database queue and persisted retries.
+- [ ] Configure Redis/Horizon if replacing the current database queue; production currently uses the owner-confirmed Forge worker/scheduler setup.
+- [x] Build parser context, action schema, reference resolver and executor from one action registry. Initially advertise tasks, ideas, projects and explicit triage; retain unsupported material for review. Luna passed the live fixture evaluation; real use remains the acceptance gate.
 - [ ] Deliver in-app typed capture, watch/phone shortcuts, brain-dump splitting, triage, capture history and `capture:import`.
 - [x] Build safe per-item retry and seven-day undo for the implemented creation actions. One failed item does not block successful siblings or execute them twice. Later mutation actions need their own reversible effects.
-- [ ] Implement the minimal offline outbox if moved to Phase 1: pending count, stable request keys and replay on open/visibility/online. Retain unsent text through auth expiry and require the same owner to resume submission.
+- [x] Implement the open-app IndexedDB outbox: pending count, stable request keys and replay on open/visibility/online. Retain unsent text through auth expiry and require the same owner to resume submission.
+- [ ] Verify real-device Shortcut offline storage/replay and cold offline app launch separately.
 
 Acceptance: one dump containing five unrelated items produces five individually traceable outcomes. Repeated requests do not duplicate work. API errors leave recoverable Inbox content. A failed queue dispatch is recoverable. Revoked tokens fail; low-confidence or ambiguous matches go to triage. No confirmation claims “saved” before server storage or an actual local outbox write succeeds.
 

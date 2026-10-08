@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\AuthenticateCapture;
 use App\Http\Middleware\EnsureChartOwner;
 use App\Http\Middleware\RequireTwoFactorAuthentication;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -46,6 +47,15 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
+        RateLimiter::for('capture-device', function (Request $request) {
+            $token = $request->attributes->get('capture_token');
+
+            return [
+                Limit::perMinute(30)->by('capture-owner:'.$request->user()->id),
+                Limit::perHour($token?->rate_limit_per_hour ?? 120)->by('capture-device:'.($token?->id ?? 'session:'.$request->user()->id)),
+            ];
+        });
+
         $this->routes(function () {
             Route::middleware('api')
                 ->prefix('api')
@@ -56,6 +66,11 @@ class RouteServiceProvider extends ServiceProvider
 
             // Include package routes in the private boundary; only named entry routes are public.
             foreach (Route::getRoutes() as $route) {
+                if ($route->getName() === 'capture.api') {
+                    $route->middleware(AuthenticateCapture::class);
+
+                    continue;
+                }
                 if (in_array($route->getName(), self::PUBLIC_ROUTES, true)) {
                     continue;
                 }

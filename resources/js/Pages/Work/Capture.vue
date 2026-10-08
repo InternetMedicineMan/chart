@@ -28,7 +28,7 @@ const retry = () => {
 </script>
 <template>
     <Link :href="route('intake')" class="text-sm text-primary">← Back to Intake</Link>
-    <div class="mb-6 mt-5"><p class="work-eyebrow">Original words, always kept</p><h2 class="work-heading">Your capture.</h2><p class="mt-2 text-sm text-base-content/50">{{ new Date(capture.client_captured_at).toLocaleString('en-US', { timeZone: capture.timezone }) }} · {{ capture.timezone }}</p></div>
+    <div class="mb-6 mt-5"><p class="work-eyebrow">Original words, always kept</p><h2 class="work-heading">Your capture.</h2><p class="mt-2 text-sm text-base-content/50">{{ new Date(capture.client_captured_at).toLocaleString('en-US', { timeZone: capture.timezone }) }} · {{ capture.timezone }}<span v-if="capture.device_label"> · {{ capture.device_label }}</span><span v-else> · {{ capture.source }}</span></p></div>
     <section ref="original" class="rounded-2xl border border-base-300 bg-base-100 p-5"><h3 class="mb-3 text-sm font-semibold">What you said</h3><p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{{ parts[0] }}<mark v-if="parts[1]" class="rounded bg-primary/20 text-base-content">{{ parts[1] }}</mark>{{ parts[2] }}</p></section>
     <div v-if="capture.error" class="mt-4 rounded-xl bg-warning/10 p-4 text-sm">{{ capture.error }}</div>
     <div v-if="!capture.parsed" class="mt-4 flex flex-wrap items-center gap-3"><p class="text-sm text-base-content/60">{{ ['received', 'processing'].includes(capture.status) ? 'Waiting for automatic sorting. You can leave this page.' : 'Your saved copy is available in the Inbox.' }}</p><button v-if="aiEnabled && ['failed', 'needs_triage'].includes(capture.status)" class="btn btn-sm" :disabled="busy" @click="retry">Retry sorting</button></div>
