@@ -113,10 +113,15 @@ class CaptureService
 
     public function confirmation(Capture $capture): array
     {
+        $capture->refresh();
         $statuses = $capture->items()->forUser($capture->user_id)->pluck('status');
         $filed = $statuses->filter(fn ($status) => $status === 'executed')->count();
         $review = $statuses->diff(['executed', 'undone'])->count();
-        $message = $capture->fallback_task_id && ! $capture->parsed ? 'Saved to Inbox. Automatic sorting needs attention.' : 'Saved. Sorting it now.';
+        $message = 'Saved. Sorting it now.';
+        if ($capture->fallback_task_id && ! $capture->parsed && ! in_array($capture->status, ['received', 'processing'], true)) {
+            $willRetry = $capture->status === 'failed' && $capture->attempts < 3 && $this->enabled();
+            $message = $willRetry ? 'Saved to Inbox. Sorting will retry automatically.' : 'Saved to Inbox. Automatic sorting needs attention.';
+        }
         if ($statuses->isNotEmpty() && ! $statuses->contains('pending')) {
             $message = "Saved. {$filed} filed".($review ? "; {$review} need review." : '.');
         }

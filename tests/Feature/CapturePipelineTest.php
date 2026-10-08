@@ -150,6 +150,10 @@ class CapturePipelineTest extends TestCase
         Http::fake(['*' => Http::response(['error' => 'upstream secret body'], 500)]);
         for ($n = 0; $n < 4; $n++) {
             $this->process($capture);
+            $this->assertSame(
+                $n < 2 ? 'Saved to Inbox. Sorting will retry automatically.' : 'Saved to Inbox. Automatic sorting needs attention.',
+                app(CaptureService::class)->confirmation($capture)['spoken_confirmation'],
+            );
             $this->travel(4)->minutes();
         }
         $this->assertSame(3, $capture->fresh()->attempts);
@@ -166,7 +170,11 @@ class CapturePipelineTest extends TestCase
         $fallback = $capture->fresh()->fallback_task_id;
         $this->respond([$this->action()]);
         $this->post(route('captures.retry', $capture->id))->assertSessionHasNoErrors();
+        $this->assertSame('Saved. Sorting it now.', app(CaptureService::class)->confirmation($capture)['spoken_confirmation']);
         $this->assertSame('executed', $this->process($capture)->status);
+        $confirmation = app(CaptureService::class)->confirmation($capture);
+        $this->assertSame('executed', $confirmation['status']);
+        $this->assertSame('Saved. 1 filed.', $confirmation['spoken_confirmation']);
         $this->assertSame(1, Task::count());
         $this->assertNotNull(Task::withTrashed()->find($fallback)->deleted_at);
         $this->process($capture);
