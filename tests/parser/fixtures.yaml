@@ -403,6 +403,78 @@
         }
       ],
       "capability": "implemented"
+    },
+    {
+      "id": "qualified_task",
+      "text": "Okay, add a task to inspect the roof. This can wait; there is no due date.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "roof",
+          "due_date": null,
+          "due_time": null
+        }
+      ],
+      "capability": "implemented; additional coverage check"
+    },
+    {
+      "id": "idea_domain_hint",
+      "text": "Idea for Ministry & Church: a weekend neighborhood picnic.",
+      "expected": [
+        {
+          "type": "capture_idea",
+          "body_contains": "picnic",
+          "domain_ref": null,
+          "due_date": null
+        }
+      ],
+      "capability": "implemented; ideas have no domain assignment"
+    },
+    {
+      "id": "library_quote",
+      "text": "Save this quote from The Hobbit, page 10: Adventure starts at the doorstep.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: Library; additional quote check"
+    },
+    {
+      "id": "separated_repeat",
+      "text": "Buy stamps. Idea: a shared grocery list. Buy stamps.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "stamps"
+        },
+        {
+          "type": "capture_idea",
+          "body_contains": "grocery"
+        }
+      ],
+      "capability": "implemented; non-adjacent repetition",
+      "context": {
+        "mode": "dump"
+      }
+    },
+    {
+      "id": "mixed_calendar",
+      "text": "Buy printer paper. Schedule coffee with Dan tomorrow at noon.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "paper"
+        },
+        {
+          "type": "needs_triage",
+          "excerpt_contains": "Dan"
+        }
+      ],
+      "capability": "mixed: Calendar deferred",
+      "context": {
+        "mode": "dump"
+      }
     }
   ]
 }

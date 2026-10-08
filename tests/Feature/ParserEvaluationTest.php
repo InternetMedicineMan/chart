@@ -169,6 +169,7 @@ class ParserEvaluationTest extends TestCase
     public function test_live_evaluation_uses_synthetic_context_and_writes_only_a_private_report(): void
     {
         $before = $this->recordCounts();
+        $originalModel = config('chart.capture.model');
         $this->response([$this->action(['title' => 'Renew SSL cert', 'excerpt' => 'Add a task to renew the SSL cert'])]);
         $this->artisan('parser:eval', ['--live' => true, '--case' => ['inbox_task'], '--model' => 'test-model'])
             ->expectsOutputToContain('PASS inbox_task')->expectsOutputToContain('1/1 selected cases passed')->assertSuccessful();
@@ -179,7 +180,7 @@ class ParserEvaluationTest extends TestCase
         $report = json_decode(File::get($files[0]->getPathname()), true);
         $this->assertTrue($report['cases'][0]['passed']);
         $this->assertSame(100, $report['cases'][0]['usage']['input_tokens']);
-        $this->assertSame('gpt-6.1-sol', config('chart.capture.model'));
+        $this->assertSame($originalModel, config('chart.capture.model'));
     }
 
     public function test_live_eval_stops_on_billing_failure_and_reports_unattempted_cases(): void
@@ -212,6 +213,6 @@ class ParserEvaluationTest extends TestCase
         foreach (['brain_dump', 'five_items', 'someday', 'calendar', 'waiting', 'ambiguous_completion', 'evening_timezone', 'spring_dst', 'fall_dst'] as $id) {
             $this->assertContains($id, $ids);
         }
-        $this->assertCount(25, $fixtures['cases']);
+        $this->assertCount(30, $fixtures['cases']);
     }
 }

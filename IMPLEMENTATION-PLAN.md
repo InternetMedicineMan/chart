@@ -42,7 +42,7 @@ Verification: 84 PHP tests passed (637 assertions), with 17 existing disabled st
 Activation/deployment:
 
 1. Deploy source and built assets; run `php artisan migrate --force` (and `php artisan chart:setup` if the previous work-record release has not been initialized).
-2. Configure `OPENAI_KEY` privately in the local/Forge environment, confirm API billing/model access, and enable `CHART_AI_ENABLED=true` only when ready to process saved captures. `CHART_AI_MODEL=gpt-6.1-sol`; `CHART_CAPTURE_QUEUE_CONNECTION=database` by default. Enabling processing lets recovery pick up previously saved captures with remaining attempts.
+2. Configure `OPENAI_KEY` privately in the local/Forge environment, confirm API billing/model access, and enable `CHART_AI_ENABLED=true` only when ready to process saved captures. `CHART_AI_MODEL=gpt-6-luna`; `CHART_CAPTURE_QUEUE_CONNECTION=database` by default. The selected model and live evaluation are recorded below. Enabling processing lets recovery pick up previously saved captures with remaining attempts.
 3. Supervise `php artisan queue:work database --queue=captures --sleep=1 --tries=1 --timeout=70`. Use `redis` instead of `database` when that connection is selected. Keep the queue retry_after above the worker timeout (existing setting: 90 seconds). Application-level retries are persisted on captures; the queue job itself uses one attempt.
 4. Ensure Forge runs `php artisan schedule:run` every minute. `capture:recover` redispatches due/interrupted captures; it can also be run manually. Refresh production config and restart workers after environment/code changes (`php artisan config:cache`, `php artisan queue:restart`).
 5. Evaluate real Appendix B examples before accepting model quality. Until then, local storage/execution/recovery are verified, but live classification, cost, latency and account access are not.
@@ -65,6 +65,28 @@ Settings now has a capture preview that makes one explicit API request and shows
 The owner configured a local API key. Two single-case live attempts returned HTTP 429; safe error inspection identified billing/credits language. No usable model response was received, so model access, quality, latency and cost remain unverified. API billing must be resolved before rerunning the controlled case and then the fixture set. Automatic sorting remains disabled and production deployment/worker setup remains pending.
 
 Verification: 99 PHP tests passed (751 assertions), with 17 existing disabled starter-feature skips; four service-worker checks, client/SSR builds, Pint, route-cache compilation/clear and diff checks passed. An isolated browser account verified missing-key messaging, text entry, disabled request submission and desktop/390px phone layout with no page errors. The initial resize check caught an in-progress sidebar transition; after waiting for the transition, the phone content had no horizontal overflow. No owner work records were changed by these checks.
+
+## Live model selection — October 8, 2026
+
+API billing is restored and live Responses API calls now work. The selected capture model is **GPT-6 Luna** (`gpt-6-luna`), updated in `config/chart.php`, `.env.example`, and the local environment. Automatic sorting remains disabled. The GPT-3.5/GPT-4 model references are in the unused Larafast content helper; Chart capture does not call it.
+
+Official [model comparison](https://developers.openai.com/api/docs/models/compare) and [Luna documentation](https://developers.openai.com/api/docs/models/gpt-6-luna) were checked on October 8: Luna is intended for focused tasks and supports structured outputs. Listed per-million-token input/output rates are $0.10/$0.50 for Luna, $2/$10 for GPT-6.1 Sol, and $10/$50 for GPT-6 Astra. Luna is the economical choice supported by these capture tests; this is not a claim that it matches Sol on every workload.
+
+The initial Luna run passed 20/25. Live failures exposed underspecified excerpt coverage, fields inappropriate for ideas, and missing explicit handling of Library/focus requests. The action-registry prompt now requires complete verbatim spans including qualifiers and repeated wording, specifies idea-only fields, and preserves Library and daily-focus requests for triage. Server validation and fixture expectations were not relaxed. Five additional cases cover qualifiers, domain hints on ideas, another book quote, separated repetitions, and supported tasks mixed with Calendar requests.
+
+Final results using the same prompt:
+
+| Model/run | Passed | Input/output tokens | Estimated token cost | Median latency |
+|---|---|---|---|---|
+| Luna, all fixtures | 30/30 | 28,326 / 6,095 | $0.0058801 | 3.16 s |
+| Luna, ten comparison cases from that run | 10/10 | Included above | $0.0022835 | 3.75 s |
+| Sol, the same ten difficult cases | 10/10 | 9,465 / 1,621 | $0.03514 | 3.74 s |
+
+These are single-run synthetic regression results, including five newly added examples. They are not an accuracy guarantee or a full Phase 1 acceptance test. Luna's longest request was 10.98 seconds. Costs use reported tokens and the listed standard text rates, not a billing invoice; caching, context growth and different captures change usage. No paid fallback or automatic model escalation was introduced. Sol remains available through `CHART_AI_MODEL` or an evaluation-only `--model=gpt-6.1-sol` override.
+
+Private evidence in local `storage/app/private/parser-evals/`: Luna `20261008-154911-fa4a1fa2-6f9c-4f1c-9d2f-29a79f80caca.json`; Sol `20261008-154656-b2122af4-badc-4527-af68-83e28b429798.json`. Both use prompt hash `28f843138e5ba11d87b60e3aabfa1965a898e8db6cbdd9c846a2972e59a0567d`. All live inputs were synthetic; evaluations created no work records. Automated verification: 99 PHP tests passed, 751 assertions, 17 existing disabled-feature skips; Pint and diff checks passed. No frontend changes or dependencies were needed.
+
+Production still needs deployment of these instructions and `CHART_AI_MODEL=gpt-6-luna` in Forge if the environment explicitly selects another model, followed by config cache refresh and worker restart. Next is supervised capture-worker/scheduler activation and real-use validation. Keep automatic sorting off until ready to process the saved backlog, since recovery may pick up earlier captures.
 
 ## Initial audit
 
