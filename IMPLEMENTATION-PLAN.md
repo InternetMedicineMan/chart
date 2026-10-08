@@ -88,6 +88,78 @@ Private evidence in local `storage/app/private/parser-evals/`: Luna `20261008-15
 
 Production still needs deployment of these instructions and `CHART_AI_MODEL=gpt-6-luna` in Forge if the environment explicitly selects another model, followed by config cache refresh and worker restart. Next is supervised capture-worker/scheduler activation and real-use validation. Keep automatic sorting off until ready to process the saved backlog, since recovery may pick up earlier captures.
 
+## Local capture activation — October 8, 2026
+
+Automatic sorting is now enabled in the local environment with `gpt-6-luna`. Before activation, local MySQL had all migrations applied, a confirmed-2FA owner, zero captures, zero queued capture jobs and zero failed jobs. There was no backlog to process. The real local database was left free of verification records.
+
+Live verification used a separate SQLite database and test owner, an actual database queue worker, and real OpenAI requests. Browser capture returned HTTP 202 in 44 ms for a single task and 18 ms for a mixed dump. The worker sorted both; the dump produced task, idea, Someday project and Calendar triage outcomes. Manual review filed the triage item, and undo reversed all six created records across those captures and the retry scenario. A capture saved while sorting was disabled successfully retried and replaced its untouched Inbox fallback. A fourth capture saved without dispatch was recovered by `schedule:run` → `capture:recover` and executed by the worker. All four API attempts completed on Luna, with zero failed queue jobs. Phone-width browser checks passed without page errors. Test server/worker processes were stopped afterward.
+
+The actual local worker and scheduler were started from the project directory; several minutely recovery runs completed successfully:
+
+```sh
+php artisan queue:work database --queue=captures --sleep=1 --tries=1 --timeout=70
+```
+
+```sh
+php artisan schedule:work
+```
+
+These are development processes, not installed macOS startup services. Restart them in separate terminals after they stop or after a reboot; keep Herd/MySQL running. Restart the worker after code/config changes. Production uses Forge supervision and cron instead.
+
+### Forge rollout to apply
+
+The owner requested settings and commands to apply manually; production has not been changed or verified by this activation checkpoint.
+
+1. Push the local `master` commits to the repository connected to Forge (`git push origin master` from the local project), then deploy the latest application code through `45ce82d` (or later) and built client/SSR assets using the existing Forge deployment flow. Preserve the existing production `APP_KEY`, database configuration and owner account. Set the following in Forge's private environment, with a valid `OPENAI_KEY` added there privately:
+
+   ```dotenv
+   CHART_AI_MODEL=gpt-6-luna
+   CHART_CAPTURE_QUEUE_CONNECTION=database
+   CHART_AI_ENABLED=false
+   ```
+
+2. In `/home/forge/chart.internetmedicineman.com/current`, run:
+
+   ```sh
+   php artisan migrate --force
+   php artisan chart:setup
+   php artisan config:cache
+   php artisan route:cache
+   php artisan chart:ai-check
+   php artisan schedule:list
+   php artisan queue:failed
+   ```
+
+   `chart:ai-check` should show the key configured, Luna, database queue and sorting disabled. `schedule:list` should show `capture:recover` every minute. In Intake, review any saved/failed captures before activation: eligible earlier captures will be picked up automatically. Verify API access with Settings → Capture preview while sorting is still off; it makes one API call without filing records.
+
+3. Create one Forge queue worker for this site: connection **database**, queue **captures**, processes **1**, sleep **1 second**, tries **1**, timeout **70 seconds**, and the same PHP version as the site. Its command is equivalent to:
+
+   ```sh
+   php /home/forge/chart.internetmedicineman.com/current/artisan queue:work database --queue=captures --sleep=1 --tries=1 --timeout=70
+   ```
+
+   Use Forge's supervised worker, not a command left running in an SSH session. The database queue's `retry_after` is 90 seconds; keep it longer than the 70-second worker/job timeout. Chart persists its own three parse attempts, so the queue job itself uses one attempt. See [Laravel queue workers](https://laravel.com/framework/docs/13.x/queues#supervisor-configuration).
+
+4. Enable the site's Laravel scheduler in Forge, or create one scheduled job as user `forge`, every minute (`* * * * *`), with command:
+
+   ```sh
+   php /home/forge/chart.internetmedicineman.com/current/artisan schedule:run
+   ```
+
+   Keep only one scheduler entry for this site. See [Laravel scheduling](https://laravel.com/framework/docs/13.x/scheduling#running-the-scheduler).
+
+5. Once preview, worker and scheduler are ready, change `CHART_AI_ENABLED=true` in Forge and run from `current`:
+
+   ```sh
+   php artisan config:cache
+   php artisan queue:restart
+   php artisan chart:ai-check
+   ```
+
+   Confirm Forge restarts the supervised worker. Capture a simple task through Intake, then a mixed dump. Check that sorting completes, review unsupported items, and try undo. Inspect `php artisan queue:failed` if the worker reports failure; capture-level errors also appear on the original capture. If sorting must be paused, set `CHART_AI_ENABLED=false`, rebuild config, and restart workers; new words remain saved in Inbox.
+
+Deployment should continue running migrations, asset builds, config/route cache refreshes and `queue:restart` when new code is released. Production activation is complete only after the owner confirms these live checks on the deployed site.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
