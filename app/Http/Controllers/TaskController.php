@@ -26,7 +26,7 @@ class TaskController extends Controller
     {
         DB::transaction(function () use ($request, $task, $setup) {
             // Lock the project before the task, matching project moves that update their children.
-            $attributes = $this->attributes($request, $setup);
+            $attributes = $this->attributes($request, $setup) + ['needs_review' => false];
             Task::forUser($request->user())->lockForUpdate()->findOrFail($task)->update($attributes);
         });
 

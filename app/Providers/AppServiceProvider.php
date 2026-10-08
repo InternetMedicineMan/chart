@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\CaptureParser;
+use App\Services\OpenAICaptureParser;
 use App\Services\SchemaOrg;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\View;
@@ -17,6 +19,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(CaptureParser::class, OpenAICaptureParser::class);
         Cashier::ignoreRoutes();
         LemonSqueezy::ignoreRoutes();
         Jetstream::ignoreRoutes();

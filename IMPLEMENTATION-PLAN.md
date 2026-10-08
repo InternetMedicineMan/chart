@@ -18,7 +18,36 @@ Validation: 42 PHP tests passed (220 assertions); 17 optional starter tests skip
 
 Work-record validation: 59 PHP tests passed (472 assertions), with the same 17 disabled starter-feature skips. Client/SSR builds, route-cache compilation, Pint and diff checks passed. The migration also ran successfully on local MySQL. An isolated browser account verified quick task entry, project creation, Inbox-to-project movement, completion/reopening, idea saving and the mobile More menu. A phone-width Bench search overflow was found and fixed; the verified content width is 390px at a 390px viewport. Screenshots were saved outside the repository, and preview data was not added to the owner's database.
 
-Remaining foundation acceptance: real iPhone installation, Android install if available, and deployment of the work-record checkpoint. The service worker currently caches only static assets and a non-sensitive fallback; offline capture is not implemented. Manual task/idea entry requires a network connection; it is not the AI capture pipeline and does not claim its never-lose guarantee yet.
+Remaining foundation acceptance: real iPhone installation, Android install if available, and production deployment. The service worker caches only static assets and a non-sensitive fallback. The new Intake capture composer has the device outbox described below; the older manual quick-add forms still require a network connection.
+
+## Capture foundation — October 8, 2026
+
+The owner approved OpenAI with standard API billing, a replaceable parser, usage tracking, and building storage/recovery before connecting a paid key. The existing Larafast social-content helper remains untouched; capture uses its own bounded Responses API adapter with strict structured output and `store: false`. The configurable starting model is `gpt-6.1-sol`; account availability and live quality are not verified yet.
+
+Implemented in this checkpoint:
+
+- Owner/session/2FA-protected `POST /captures` returns `202` only after persisting original text, a user-scoped UUID request key, the original capture timestamp, and timezone. Changed words/time cannot reuse a request key. No page view makes an AI call.
+- Dedicated asynchronous `captures` queue, durable attempt/lease state, scheduled recovery after lost dispatch or worker interruption, three automatic parse attempts, one linked Inbox fallback, and conservative replacement of that fallback only if it has not changed.
+- One action registry supplies prompt descriptions and the output schema. Initially supports creating tasks, ideas, and active/Someday projects. Server validation and owned fuzzy-reference resolution send ambiguity, unsupported actions, malformed dates, untraceable excerpts, and uncovered words to review. Exact repeated proposals within a dump are merged.
+- Independently executable items, per-item review/retry, action audit/snapshots, and seven-day undo that preserves subsequent edits and project children. Pending siblings remain recoverable if processing is interrupted during manual review.
+- Searchable Intake history and capture detail with original-word highlighting, factual filing outcomes, review controls, and per-attempt model/token usage. Tasks, ideas and projects with middling confidence display “Check this.” Manual editing/keeping clears that flag. Captures waiting over 48 hours surface on Chart.
+- Native IndexedDB outbox in the open app. Stable IDs/timestamps survive retries and session expiry; entries are removed only after a `202` with a capture ID. Owner ID is checked server-side before replay. Pending words are inspectable in Intake; replay occurs on app open, visibility return, or reconnect. A cold offline launch still shows the static reconnect page; this is not full offline launch support.
+
+Queue choice: use Laravel's existing database driver for this foundation, configurable to Redis through `CHART_CAPTURE_QUEUE_CONNECTION`. This keeps the path asynchronous even when the starter's default queue is `sync`, without adding dependencies. Horizon and production worker supervision remain pending; this does not mark the full Redis/Horizon checklist item complete.
+
+Schema additions implement the previously proposed durable capture identity/execution changes: captures, capture_items, capture_attempts, action_logs, jobs, and project needs_review. No existing work records are removed. The migration has run on local MySQL. AI is disabled by default; all verification used controlled responses, not paid API calls or real owner records.
+
+Verification: 84 PHP tests passed (637 assertions), with 17 existing disabled starter-feature skips. All four service-worker privacy tests passed. Client and SSR builds, Pint, route-cache compilation/clear, and diff checks passed. An isolated SQLite/browser account verified real IndexedDB writes, offline replay, stable IDs across session expiry and reload, retention of composer text when device storage fails, triage resolution, undo, and a 390px layout with no horizontal overflow. Preview records stayed out of the owner's MySQL database. Live model behavior and iPhone/Watch testing remain unverified.
+
+Activation/deployment:
+
+1. Deploy source and built assets; run `php artisan migrate --force` (and `php artisan chart:setup` if the previous work-record release has not been initialized).
+2. Configure `OPENAI_KEY` privately in the local/Forge environment, confirm API billing/model access, and enable `CHART_AI_ENABLED=true` only when ready to process saved captures. `CHART_AI_MODEL=gpt-6.1-sol`; `CHART_CAPTURE_QUEUE_CONNECTION=database` by default. Enabling processing lets recovery pick up previously saved captures with remaining attempts.
+3. Supervise `php artisan queue:work database --queue=captures --sleep=1 --tries=1 --timeout=70`. Use `redis` instead of `database` when that connection is selected. Keep the queue retry_after above the worker timeout (existing setting: 90 seconds). Application-level retries are persisted on captures; the queue job itself uses one attempt.
+4. Ensure Forge runs `php artisan schedule:run` every minute. `capture:recover` redispatches due/interrupted captures; it can also be run manually. Refresh production config and restart workers after environment/code changes (`php artisan config:cache`, `php artisan queue:restart`).
+5. Evaluate real Appendix B examples before accepting model quality. Until then, local storage/execution/recovery are verified, but live classification, cost, latency and account access are not.
+
+Still open in capture checkpoint 3: scoped watch tokens and `/api/capture?wait=1`, Shortcut setup/device tests, `capture:import`, live `parser:eval`/dry-run interface, full notifications feed/push, cold offline capture launch, and the remaining Phase 1 actions as their underlying records become available. Undo currently lives with each capture outcome. The full never-lose/device acceptance gate is not yet complete.
 
 ## Initial audit
 
@@ -105,11 +134,11 @@ Acceptance: a task can be created, assigned to a valid project/domain, completed
 ### 3. Reliable capture as early as possible
 
 - [ ] Add raw captures, items, hashed scoped capture tokens, action logs and notification/undo records.
-- [ ] Persist incoming words and their idempotency key before dispatching any AI job; recover if job dispatch itself fails after the save.
+- [x] Persist incoming words and their idempotency key before dispatching any AI job; recover if job dispatch itself fails after the save. Session capture is implemented; token capture follows.
 - [ ] Configure Redis queues/Horizon and retries. Return a quick `202`, with a bounded `?wait=1` path and factual server-derived confirmation.
-- [ ] Build parser context, action schema, reference resolver and executor from one action registry. Advertise only supported actions; keep unsupported later-phase material as a flagged idea/raw capture.
+- [x] Build parser context, action schema, reference resolver and executor from one action registry. Initially advertise tasks, ideas, projects and explicit triage; retain unsupported material for review. Live model evaluation remains pending.
 - [ ] Deliver in-app typed capture, watch/phone shortcuts, brain-dump splitting, triage, capture history and `capture:import`.
-- [ ] Build safe per-item retry and seven-day undo. One failed item must not block successful siblings or execute them twice.
+- [x] Build safe per-item retry and seven-day undo for the implemented creation actions. One failed item does not block successful siblings or execute them twice. Later mutation actions need their own reversible effects.
 - [ ] Implement the minimal offline outbox if moved to Phase 1: pending count, stable request keys and replay on open/visibility/online. Retain unsent text through auth expiry and require the same owner to resume submission.
 
 Acceptance: one dump containing five unrelated items produces five individually traceable outcomes. Repeated requests do not duplicate work. API errors leave recoverable Inbox content. A failed queue dispatch is recoverable. Revoked tokens fail; low-confidence or ambiguous matches go to triage. No confirmation claims “saved” before server storage or an actual local outbox write succeeds.
@@ -172,7 +201,7 @@ These do not block planning or local shell work. Do not paste secrets into chat;
 - Owner account identity and whether a real owner already exists in the database.
 - Existing VPS versus new hosting, management tool, Redis/worker availability, DNS/TLS for `chart.internetmedicineman.com` and the `ops.` redirect.
 - Confirm the Appendix A domains and whether Ministry remains under the personal sphere; that is the proposed default.
-- Anthropic credentials/model selection and notification channel before capture/reminder integration tests.
+- OpenAI API key/billing/model access and notification channel before live capture/reminder integration tests.
 - Google Cloud project/OAuth setup and which calendars can be written, before Calendar sync.
 - Private storage bucket and backup destination before production attachments/export.
 - Inbound email provider can wait for Phase 2.

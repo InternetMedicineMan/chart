@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ArrowLeftStartOnRectangleIcon, Bars3Icon, ChevronDoubleLeftIcon } from '@heroicons/vue/24/outline';
 import ChartBrand from '@/Components/ChartBrand.vue';
+import CaptureOutboxStatus from '@/Components/Work/CaptureOutboxStatus.vue';
 import { navigation, mobileNavigation } from '@/navigation';
 
 const page = usePage();
@@ -11,7 +12,7 @@ const current = computed(() => {
     const path = page.url.split('?')[0];
     if (path.startsWith('/user/') || path.startsWith('/settings/')) return 'profile.show';
     if (path.startsWith('/bench') || path.startsWith('/projects/')) return 'bench';
-    if (path === '/intake') return 'intake';
+    if (path === '/intake' || path.startsWith('/captures/')) return 'intake';
     if (path === '/ideas') return 'ideas';
     if (path === '/more') return 'more';
     return 'dashboard';
@@ -23,6 +24,7 @@ const logout = () => router.post(route('logout'));
 
 <template>
     <Head :title="title" />
+    <CaptureOutboxStatus v-if="page.props.auth.user.two_factor_confirmed_at" :owner-id="page.props.auth.user.id" />
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-base-100 focus:p-4">Skip to content</a>
     <div class="min-h-dvh bg-base-200/60">
         <aside :class="collapsed ? 'w-24' : 'w-64'" class="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-base-300 bg-base-100 px-4 py-7 transition-[width] md:flex">

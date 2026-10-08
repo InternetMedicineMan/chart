@@ -26,7 +26,7 @@ class ProjectController extends Controller
     {
         DB::transaction(function () use ($request, $project) {
             $record = Project::forUser($request->user())->lockForUpdate()->findOrFail($project);
-            $attributes = $request->validated();
+            $attributes = $request->validated() + ['needs_review' => false];
             $attributes['completed_at'] = $attributes['lifecycle'] === ProjectLifecycle::Done->value ? ($record->completed_at ?? now()) : null;
             $record->update($attributes);
             // Include deleted tasks so restoring one cannot put it under the project's former domain.

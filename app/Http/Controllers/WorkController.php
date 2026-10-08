@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
+use App\Models\Capture;
 use App\Models\Note;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\CaptureService;
 use App\Services\LocalDate;
 use App\Services\WorkOptions;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,6 +33,7 @@ class WorkController extends Controller
             'inboxCount' => Task::forUser($user)->whereNull('completed_at')->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('is_inbox', true))->count(),
             'ideaCount' => Note::forUser($user)->where('kind', 'thought')->count(),
             'projectCount' => Project::forUser($user)->where('lifecycle', 'active')->count(),
+            'oldCaptureCount' => Capture::forUser($user)->whereIn('status', ['needs_triage', 'partially_executed', 'failed'])->where('created_at', '<=', now()->subHours(48))->count(),
         ]);
     }
 
@@ -82,11 +85,19 @@ class WorkController extends Controller
 
     public function intake(Request $request, WorkOptions $options): Response
     {
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:100'], 'review' => ['nullable', 'boolean']]);
+
         return Inertia::render('Work/Intake', [
+            'filters' => $filters,
+            'aiEnabled' => app(CaptureService::class)->enabled(),
+            'captures' => Capture::forUser($request->user())
+                ->when($filters['q'] ?? null, fn ($q, $text) => $q->where('raw_text', 'like', '%'.$text.'%'))
+                ->when($filters['review'] ?? false, fn ($q) => $q->whereIn('status', ['needs_triage', 'partially_executed', 'failed']))
+                ->withCount('items')->latest('id')->paginate(10, ['*'], 'captures_page')->withQueryString(),
             'options' => $options->forUser($request->user()),
             'tasks' => Task::forUser($request->user())->whereNull('completed_at')
                 ->whereHas('domain', fn (Builder $q) => $q->forUser($request->user())->where('is_inbox', true))
-                ->with('project')->orderByDesc('id')->paginate(20),
+                ->with('project')->orderByDesc('id')->paginate(20)->withQueryString(),
         ]);
     }
 

@@ -1,0 +1,72 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\ResolveCaptureItemRequest;
+use App\Http\Requests\StoreCaptureRequest;
+use App\Models\Capture;
+use App\Models\CaptureAttempt;
+use App\Models\CaptureItem;
+use App\Services\CaptureActions;
+use App\Services\CaptureService;
+use App\Services\WorkOptions;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class CaptureController extends Controller
+{
+    public function store(StoreCaptureRequest $request, CaptureService $service): JsonResponse
+    {
+        $capture = $service->receive($request->user(), $request->validated());
+
+        return response()->json($service->confirmation($capture), 202);
+    }
+
+    public function show(Request $request, int $capture, WorkOptions $options): Response
+    {
+        $record = Capture::forUser($request->user())->with(['items' => fn ($q) => $q->forUser($request->user())->orderBy('sequence')])->findOrFail($capture);
+
+        return Inertia::render('Work/Capture', [
+            'capture' => $record, 'options' => $options->forUser($request->user()),
+            'attempts' => CaptureAttempt::forUser($request->user())->where('capture_id', $record->id)->get(['id', 'model', 'status', 'input_tokens', 'output_tokens', 'created_at']),
+            'aiEnabled' => app(CaptureService::class)->enabled(),
+        ]);
+    }
+
+    public function retry(Request $request, int $capture, CaptureService $service): RedirectResponse
+    {
+        $service->retry(Capture::forUser($request->user())->findOrFail($capture));
+
+        return back()->with('message', 'Saved capture queued for another attempt.');
+    }
+
+    public function resolve(ResolveCaptureItemRequest $request, int $item, CaptureActions $actions, CaptureService $service): RedirectResponse
+    {
+        $record = CaptureItem::forUser($request->user())->findOrFail($item);
+        $actions->execute($record, $request->validated() + ['confidence' => 1, 'excerpt' => $record->excerpt]);
+        $service->summarize(Capture::forUser($request->user())->findOrFail($record->capture_id));
+
+        return back()->with('message', $record->fresh()->status === 'executed' ? 'Item filed.' : 'Item still needs review. Your original words are safe.');
+    }
+
+    public function retryItem(Request $request, int $item, CaptureActions $actions, CaptureService $service): RedirectResponse
+    {
+        $record = CaptureItem::forUser($request->user())->findOrFail($item);
+        $actions->execute($record);
+        $service->summarize(Capture::forUser($request->user())->findOrFail($record->capture_id));
+
+        return back()->with('message', $record->fresh()->status === 'executed' ? 'Item filed.' : 'Item still needs review.');
+    }
+
+    public function undo(Request $request, int $item, CaptureActions $actions, CaptureService $service): RedirectResponse
+    {
+        $record = CaptureItem::forUser($request->user())->findOrFail($item);
+        $actions->undo($record);
+        $service->summarize(Capture::forUser($request->user())->findOrFail($record->capture_id));
+
+        return back()->with('message', 'Filing undone. Your original capture is still here.');
+    }
+}

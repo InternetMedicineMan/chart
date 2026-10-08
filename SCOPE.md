@@ -638,7 +638,7 @@ These are not guesses. They're the values the Node implementation settled on aft
 
 1. Text arrives at `POST /api/capture` (session auth **or** a bearer capture token) with `{ text, source, device_label?, captured_at? }`.
 2. A `captures` row is written **before anything else happens**, so the words are safe even if everything after this fails. The endpoint returns `202`. Shortcuts use `?wait=1` to hold for up to 8 seconds and get a `spoken_confirmation`. If parsing takes longer, the response is "Saved. Sorting it now." and the result arrives as a push notification.
-3. The `ParseCapture` job builds a **fresh context** (never a stale cached one) and calls Claude.
+3. The `ParseCapture` job builds a **fresh context** (never a stale cached one) and calls the configured parser provider (OpenAI initially; D28).
 4. The `ActionExecutor` validates each action against a schema, resolves matches, and writes the records.
 5. Each executed action creates a notification with an **Undo** payload.
 6. Ambiguous or low-confidence results → `needs_triage` → Capture Inbox. Nothing is guessed.
@@ -703,7 +703,7 @@ Rules:
 
 ### 9.4 Model Routing
 
-- Default parse: the larger Claude model.
+- Default parse: OpenAI initially, using a configurable model and replaceable provider adapter (D28). Validate quality on Appendix B before accepting the model; do not select it based on a chat subscription tier.
 - Resurfacing picks, OCR cleanup, and observation text: the small model.
 - Journal photo OCR: the vision-capable model.
 - Prompt caching is on for the static system block. Only user-triggered events make API calls, never page loads.
@@ -969,6 +969,7 @@ First steps:
 | D25 | Approved C/chart icon; persistent desktop sidebar and mobile bottom navigation | Owner approved icon and implementation checklist October 7, 2026 | After real-device use |
 | D26 | Owner identity is configured by user ID; only that account may authenticate or use an existing session | Prevent other starter/demo accounts from accessing Chart; existing real accounts are preserved | If single-user scope changes |
 | D27 | Use Appendix A starter domains, with Ministry & Church under Personal | Owner confirmed October 8, 2026; domains remain editable in Settings | After real use |
+| D28 | OpenAI first for capture, with standard API billing, replaceable parser and usage tracking | Owner approved October 8, 2026 after distinguishing ChatGPT/Claude subscriptions from API billing. Build and test durable capture before connecting a paid key | After real capture evaluation; provider choice remains revisable |
 
 ---
 

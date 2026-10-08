@@ -18,14 +18,14 @@ class IdeaController extends Controller
     public function update(Request $request, int $idea): RedirectResponse
     {
         Note::forUser($request->user())->where('kind', 'thought')->findOrFail($idea)
-            ->update($request->validate(['body' => ['required', 'string', 'max:20000']]));
+            ->update($request->validate(['body' => ['required', 'string', 'max:20000']]) + ['needs_review' => false]);
 
         return back()->with('message', 'Idea updated.');
     }
 
     public function review(Request $request, int $idea): RedirectResponse
     {
-        Note::forUser($request->user())->where('kind', 'thought')->findOrFail($idea)->update(['reviewed_at' => now()]);
+        Note::forUser($request->user())->where('kind', 'thought')->findOrFail($idea)->update(['reviewed_at' => now(), 'needs_review' => false]);
 
         return back()->with('message', 'Marked reviewed.');
     }
