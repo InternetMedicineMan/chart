@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import ActionSection from '@/Components/Profile/ActionSection.vue';
 import ConfirmsPassword from '@/Components/Profile/ConfirmsPassword.vue';
@@ -16,7 +16,7 @@ const props = defineProps({
 
 const page = usePage();
 const enabling = ref(false);
-const confirming = ref(false);
+const confirming = ref(props.requiresConfirmation && page.props.auth.user.two_factor_enabled && !page.props.auth.user.two_factor_confirmed_at);
 const disabling = ref(false);
 const qrCode = ref(null);
 const setupKey = ref(null);
@@ -91,6 +91,15 @@ const regenerateRecoveryCodes = () => {
         .then(() => showRecoveryCodes());
 };
 
+onMounted(() => {
+    if (confirming.value) {
+        // Password confirmation may have expired; the Resume action below reauthorizes this request.
+        showQrCode().then(showSetupKey).catch(() => {});
+    }
+});
+
+const resumeSetup = () => Promise.all([showQrCode(), showSetupKey(), showRecoveryCodes()]);
+
 const disableTwoFactorAuthentication = () => {
     disabling.value = true;
 
@@ -149,7 +158,7 @@ const disableTwoFactorAuthentication = () => {
 
                     <div v-if="setupKey" class="mt-4 max-w-xl text-sm">
                         <p class="font-semibold">
-                            {{ $t('Setup Key') }}: <span v-html="setupKey"></span>
+                            {{ $t('Setup Key') }}: <span v-text="setupKey"></span>
                         </p>
                     </div>
 
@@ -188,6 +197,9 @@ const disableTwoFactorAuthentication = () => {
             </div>
 
             <div class="mt-5">
+                <ConfirmsPassword v-if="confirming && !qrCode" @confirmed="resumeSetup">
+                    <SecondaryButton type="button" class="mb-3">Resume setup</SecondaryButton>
+                </ConfirmsPassword>
                 <div v-if="! twoFactorEnabled">
                     <ConfirmsPassword @confirmed="enableTwoFactorAuthentication">
                         <PrimaryButton type="button" :class="{ 'opacity-25': enabling }" :disabled="enabling">

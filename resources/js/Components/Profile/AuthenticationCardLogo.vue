@@ -1,10 +1,8 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
-import ApplicationMark from "@/Components/Profile/ApplicationMark.vue";
+import ChartBrand from '@/Components/ChartBrand.vue';
 </script>
 
 <template>
-    <Link :href="'/'">
-        <ApplicationMark class="block h-32 w-32 rounded-sm"/>
-    </Link>
+    <Link href="/" aria-label="Chart home"><ChartBrand /></Link>
 </template>

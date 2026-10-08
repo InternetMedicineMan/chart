@@ -7,7 +7,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy/dist/vue.m';
 import { i18nVue } from 'laravel-vue-i18n';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Larafast';
+const appName = 'Chart';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -28,3 +28,11 @@ createInertiaApp({
         color: '#4B5563',
     },
 });
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(error => {
+            console.warn('Chart offline shell could not be registered.', error);
+        });
+    });
+}

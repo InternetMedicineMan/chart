@@ -4,11 +4,20 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Jetstream\Jetstream;
 use Tests\TestCase;
 
 class UpdateTeamMemberRoleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        if (! Jetstream::hasTeamFeatures()) {
+            $this->markTestSkipped('Teams are disabled for single-owner Chart.');
+        }
+    }
 
     public function test_team_member_roles_can_be_updated(): void
     {

@@ -4,11 +4,20 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Jetstream\Jetstream;
 use Tests\TestCase;
 
 class LeaveTeamTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        if (! Jetstream::hasTeamFeatures()) {
+            $this->markTestSkipped('Teams are disabled for single-owner Chart.');
+        }
+    }
 
     public function test_users_can_leave_teams(): void
     {

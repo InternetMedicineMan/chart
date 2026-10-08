@@ -1,11 +1,9 @@
 <template>
-    <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0">
-        <div>
-            <slot name="logo" />
-        </div>
-
-        <div class="w-full sm:max-w-md mt-6 px-6 py-4 border border-base-content/20 shadow-md overflow-hidden sm:rounded-lg">
+    <main class="auth-surface flex min-h-dvh flex-col items-center justify-center px-5 py-12">
+        <div class="mb-9"><slot name="logo" /></div>
+        <div class="w-full max-w-md rounded-3xl border border-base-300 bg-base-100 p-7 shadow-xl shadow-slate-900/5 sm:p-9">
             <slot />
         </div>
-    </div>
+        <p class="mt-8 text-xs tracking-wide text-base-content/50">A private place for what matters.</p>
+    </main>
 </template>

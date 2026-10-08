@@ -75,9 +75,7 @@ class User extends Authenticatable implements FilamentUser
      *
      * @var array<int, string>
      */
-    protected $appends = [
-        'profile_photo_url',
-    ];
+    protected $appends = [];
 
     // Relations
     public function socialAccounts(): HasMany

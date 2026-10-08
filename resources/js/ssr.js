@@ -6,7 +6,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy/dist/vue.m';
 import { i18nVue } from 'laravel-vue-i18n';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = 'Chart';
 
 createServer((page) =>
     createInertiaApp({

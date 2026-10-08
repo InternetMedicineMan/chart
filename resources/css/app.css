@@ -3,7 +3,7 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 @plugin "daisyui" {
-    themes: all;
+    themes: false;
 }
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -47,6 +47,45 @@
 
 @layer base {
     html {
-        font-family: "Poppins", sans-serif;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 }
+
+@plugin "daisyui/theme" {
+  name: "chart";
+  default: true;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f3f5f9;
+  --color-base-300: #e0e5ed;
+  --color-base-content: #202d44;
+  --color-primary: #234d9d;
+  --color-primary-content: #ffffff;
+  --color-secondary: #568d7f;
+  --color-secondary-content: #ffffff;
+  --color-accent: #8584ed;
+  --color-accent-content: #ffffff;
+  --color-neutral: #202d44;
+  --color-neutral-content: #ffffff;
+  --color-info: #3b82f6;
+  --color-info-content: #ffffff;
+  --color-success: #22815c;
+  --color-success-content: #ffffff;
+  --color-warning: #a66716;
+  --color-warning-content: #ffffff;
+  --color-error: #b83c47;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+}
+
+.auth-surface { background: radial-gradient(ellipse at 50% 0%, #e4ebf9 0, #f6f7fa 55%); }
+.app-header { padding-top: max(1.25rem, env(safe-area-inset-top)); }
+.bottom-navigation { padding-bottom: env(safe-area-inset-bottom); }
+.app-content { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .app-content { padding-bottom: 3rem; } }
+button, a, input, select, textarea { touch-action: manipulation; }
+input, select, textarea { font-size: 16px; }
+:focus-visible { outline: 2px solid #234d9d; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

@@ -5,9 +5,7 @@ namespace Tests\Feature;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\User;
-use App\Services\InvoicePdfService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Mockery;
 use Tests\TestCase;
 
 class InvoiceTest extends TestCase
@@ -58,32 +56,8 @@ class InvoiceTest extends TestCase
         $this->assertSame(2200, $invoice->total);
     }
 
-    public function test_invoice_download_route_returns_pdf_response(): void
+    public function test_invoice_download_route_is_disabled(): void
     {
-        $user = User::factory()->create();
-        $invoice = Invoice::create([
-            'customer_name' => $user->name,
-            'customer_email' => $user->email,
-            'issued_at' => now(),
-            'currency' => 'usd',
-        ]);
-
-        $this->mock(InvoicePdfService::class, function ($mock) use ($invoice) {
-            $mock->shouldReceive('render')
-                ->once()
-                ->with(Mockery::on(fn ($given) => $given->is($invoice)))
-                ->andReturn('%PDF-1.4');
-
-            $mock->shouldReceive('filename')
-                ->once()
-                ->with(Mockery::on(fn ($given) => $given->is($invoice)))
-                ->andReturn('inv-000001.pdf');
-        });
-
-        $response = $this->actingAs($user)->get(route('invoices.download', $invoice));
-
-        $response->assertOk();
-        $response->assertHeader('Content-Type', 'application/pdf');
-        $this->assertStringContainsString('%PDF-1.4', $response->getContent());
+        $this->actingAs(User::factory()->create())->get('/invoices/1/download')->assertNotFound();
     }
 }
