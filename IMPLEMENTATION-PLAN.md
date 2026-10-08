@@ -177,6 +177,8 @@ Verification: **116 PHP tests passed (891 assertions)**, with 17 existing disabl
 
 The migration ran on local MySQL. The local capture worker was restarted with current code; the existing scheduler remains running. Real iPhone Shortcuts action names, file permissions, airplane-mode dictation/storage and replay must still be checked on the device. The iPhone's local folder cannot serve as a shared Watch outbox. Watch connectivity/offline testing, an installable Shortcut artifact, push notifications, and `capture:import` remain open; do not treat this as completion of the full never-lose capture gate.
 
+Shortcut guide correction: the owner’s iPhone has no Generate UUID action. The guide now omits the optional request_key and uses the already-supported token + original timestamp + text identity for retries. It separates actions into numbered steps, explains how to name CaptureToken, and distinguishes typed text from selected output variables. After JSON conversion, the available Generate Hash action is used only to name the outbox file; Set Name must still receive CaptureJSON as the file contents. Real-device verification remains in progress.
+
 ### Deploy this slice, then test on iPhone
 
 Use the existing Forge release flow to deploy this code and build assets (`npm ci`, `npm run build` where the deployment normally builds). No new dependencies, API keys, worker definitions or scheduler entries are needed. Run the migration before activating the new release, then refresh caches and restart the supervised worker:
