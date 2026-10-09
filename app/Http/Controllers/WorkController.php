@@ -13,6 +13,7 @@ use App\Services\DailyPlanning;
 use App\Services\LocalDate;
 use App\Services\WaitTracking;
 use App\Services\WorkOptions;
+use App\Services\WorkStateResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,14 +23,17 @@ use Inertia\Response;
 
 class WorkController extends Controller
 {
-    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates, DailyPlanning $planning, WaitTracking $waits): Response
+    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates, DailyPlanning $planning, WaitTracking $waits, WorkStateResolver $states): Response
     {
         $user = $request->user();
-        $due = $planning->activeTasks($user)->whereNull('completed_at')->whereNull('waiting_on_person_id')->whereDate('due_date', '<=', $dates->today($user));
+        $snapshot = $states->snapshot($user);
+        $plan = $planning->today($user);
+        $due = $planning->activeTasks($user)->whereNotIn('id', $plan['tasks']->pluck('id'))->whereNull('completed_at')->whereNull('waiting_on_person_id')->whereDate('due_date', '<=', $dates->today($user));
 
         return Inertia::render('Dashboard', [
             'options' => $options->forUser($user),
-            'dailyPlan' => $planning->today($user),
+            'dailyPlan' => $plan,
+            'quiet' => $states->quiet($snapshot),
             'waiting' => $waits->briefing($user),
             'dueCount' => (clone $due)->count(),
             'dueTasks' => $due->with(['project', 'domain'])->orderBy('due_date')->orderBy('priority')->orderBy('id')->limit(7)->get(),
@@ -40,15 +44,17 @@ class WorkController extends Controller
         ]);
     }
 
-    public function bench(Request $request, WorkOptions $options, WaitTracking $waits): Response
+    public function bench(Request $request, WorkOptions $options, WaitTracking $waits, WorkStateResolver $states): Response
     {
         $filters = $request->validate([
             'sphere' => ['nullable', Rule::in(['personal', 'work'])],
+            'state' => ['nullable', Rule::in(['quiet', 'my_move', 'waiting', 'ok'])],
             'domain' => ['nullable', 'integer'],
             'status' => ['nullable', Rule::in(['open', 'waiting', 'completed', 'trash'])],
             'project_status' => ['nullable', Rule::in(['current', 'waiting', 'trash'])],
             'q' => ['nullable', 'string', 'max:100'],
         ]);
+        $snapshot = $states->snapshot($request->user());
         $tasks = Task::forUser($request->user())->with(['domain', 'project']);
         $projects = Project::forUser($request->user())->with('domain')
             ->withCount(['tasks as open_tasks_count' => fn (Builder $query) => $query->forUser($request->user())->whereNull('completed_at')]);
@@ -74,24 +80,41 @@ class WorkController extends Controller
             default => $tasks->whereNull('completed_at'),
         };
 
-        $projectPage = $projects->orderBy('name')->paginate(12, ['*'], 'projects_page')->withQueryString();
+        if ($filters['state'] ?? null) {
+            $projectIds = $snapshot['projects']->filter(fn ($state) => $state['state'] === $filters['state'])->keys();
+            $domainIds = $snapshot['domains']->filter(fn ($state) => $state['state'] === $filters['state'])->keys();
+            $projects->whereIn('id', $projectIds);
+            $tasks->where(fn ($query) => $query->whereIn('project_id', $projectIds)->orWhere(fn ($query) => $query->whereNull('project_id')->whereIn('domain_id', $domainIds)));
+        }
+        foreach (['quiet', 'my_move', 'waiting', 'ok'] as $state) {
+            $ids = $snapshot['projects']->filter(fn ($row) => $row['state'] === $state)->keys()->all();
+            if ($ids) {
+                $projects->orderByRaw('CASE WHEN id IN ('.implode(',', array_fill(0, count($ids), '?')).') THEN 0 ELSE 1 END', $ids);
+            }
+        }
+        $projectPage = $projects->orderByRaw('target_date IS NULL')->orderBy('target_date')->orderBy('name')->paginate(12, ['*'], 'projects_page')->withQueryString();
+        $projectPage->getCollection()->each(fn ($project) => $project->setAttribute('work_state', $snapshot['projects']->get($project->id)));
+        $workOptions = $options->forUser($request->user());
+        $workOptions['domains']->each(fn ($domain) => $domain->setAttribute('work_state', $snapshot['domains']->get($domain->id)));
+
         $taskPage = $tasks->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString();
         $waits->decorate($projectPage->getCollection(), $request->user());
         $waits->decorate($taskPage->getCollection(), $request->user());
 
         return Inertia::render('Work/Bench', [
-            'options' => $options->forUser($request->user()), 'filters' => $filters,
+            'options' => $workOptions, 'filters' => $filters,
             'projects' => $projectPage,
             'tasks' => $taskPage,
         ]);
     }
 
-    public function project(Request $request, int $project, WorkOptions $options, WaitTracking $waits): Response
+    public function project(Request $request, int $project, WorkOptions $options, WaitTracking $waits, WorkStateResolver $states): Response
     {
         $record = Project::forUser($request->user())->with('domain')->withCount([
             'tasks as open_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNull('completed_at'),
             'tasks as completed_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNotNull('completed_at'),
         ])->findOrFail($project);
+        $record->setAttribute('work_state', $states->snapshot($request->user())['projects']->get($record->id));
         $filters = $request->validate(['status' => ['nullable', Rule::in(['open', 'completed'])]]);
         $waits->decorate($record->newCollection([$record]), $request->user());
         $tasks = Task::forUser($request->user())->where('project_id', $record->id)

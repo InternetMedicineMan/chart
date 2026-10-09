@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: manual task/project waits and expected response dates are implemented and migrated locally, following daily Top 3 and tomorrow’s focus. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
+Latest checkpoint: shared computed project/domain states now drive Briefing, Bench and project pages, following manual waits and daily planning. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -252,6 +252,19 @@ Verification: 94 relevant PHP tests passed (1,236 assertions), including 15 wait
 
 Deployment: local MySQL migration completed. Deploy code and built assets through Forge, then run `php artisan migrate --force` before `php artisan queue:restart`; rebuild configuration and route caches through the existing deployment flow. No new environment settings, dependencies or scheduler entries. Nothing was pushed or deployed by the agent.
 
+## Computed project and domain states — October 9, 2026
+
+- `WorkStateResolver` computes project and domain state from current owned records: cadence quiet first, overdue waits next, due/overdue or Top 3 tasks, open waits, then finite outcomes with open tasks. The fallback is “No immediate move,” following Section 8.1. Parked/archived domains and parked/Someday/done/dropped projects are excluded from attention.
+- Domain state rolls up the highest urgency from its projects. Bench shows state, reason and recency on both domain headings and project rows, including domains without projects. State filters apply before project pagination; more urgent projects sort first, followed by target date/name. Project pages show a shared state strip before quick entry and tasks, including open/due/overdue/waiting task counts and the oldest wait.
+- Briefing adds a capped five-item Gone quiet block and an overflow link. Direct overdue waits sort by lateness; cadence quiet sorts by how far past cadence it is. Parent summaries inherited solely from a project are omitted from this block to avoid repeating the same signal. These are current computed signals, not persisted nightly observations; notification scoring/deduplication/snooze remains future work.
+- Date math uses local calendar dates, including Chicago evenings and both DST transitions. Expected response dates become late after their local date passes. Work without a recorded touch uses creation as its cadence baseline and says “No activity yet”; no activity is invented. The quiet switch suppresses inactivity warnings, while overdue responses still surface.
+- Today’s Top 3 tasks are no longer duplicated in Briefing’s due-task block. Task completion already touches project/domain, and the next response reflects it. Task dates, wait changes, lifecycle, quiet/cadence settings, timezone changes and local midnight also affect the next read.
+- Implementation choice: use one fresh seven-query aggregation set per page instead of a cross-request ten-minute cache. Task totals aggregate in SQL; only open wait details and subject summaries are loaded for resolution. This avoids stale results after edits, bulk updates or midnight without introducing an invalidation subsystem. The scope’s optional performance layer is explicitly pending rather than claiming cache invalidation is implemented. People state, activity/touch expansion, milestones and nightly observations remain later slices.
+
+Verification: 74 relevant PHP tests passed (1,059 assertions), including 18 state cases for precedence, parent urgency, inactive work, cadence switches, creation baselines, finite outcomes, Top 3, completion/reopening, waits, timezone/DST, cross-page equality, pagination/limits, ownership and a fixed query count as projects grow. Client/SSR builds, Pint and diff checks passed. Isolated desktop and 390px phone browser checks verified the Gone quiet block, state filter, project strip, and transitions from overdue waiting to my move, calm after completion, and waiting again. No page errors or horizontal overflow. A read-only aggregation check passed on local MySQL without changing owner data.
+
+Deployment: deploy code and built assets through the existing Forge flow. No migration, new dependencies, environment settings or scheduler entries are needed for this checkpoint. No push/deployment was performed by the agent. Activity logging and touch propagation are next; the isolated preview server was stopped after checks.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -356,7 +369,8 @@ Acceptance: one dump containing five unrelated items produces five individually 
 - [ ] Add milestones, subtasks, recurring tasks and extra touch targets; extend voice capture with reversible waiting actions.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
 - [ ] Add activity entries with minutes and full touch propagation; extend parser actions to daily planning with reversible mutations.
-- [ ] Build the shared `WorkStateResolver`, cache invalidation and parent roll-ups; use it in both Briefing and Bench.
+- [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
+- [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
 - [ ] Implement recurrence and completion/undo together so retries and undo cannot create extra occurrences or false cadence resets.
 
 Acceptance: completing a task touches its intended subjects; overdue waits outrank ordinary due work; parked/someday items stay out of attention lists; exactly three tasks can be selected for a day; state updates after edits, not only after touches. Date-boundary tests cover Chicago evening timestamps and DST.
@@ -364,7 +378,8 @@ Acceptance: completing a task touches its intended subjects; overdue waits outra
 ### 5. Briefing, Bench and project views
 
 - [ ] Replace the SaaS dashboard with capped Briefing blocks, including honest empty states.
-- [ ] Build Bench filters, domain roll-ups, project state strips, tasks, activity and weighted milestone progress.
+- [x] Add Bench state filters, domain roll-ups and project state strips alongside existing tasks.
+- [ ] Add activity and weighted milestone progress to Bench/project views.
 - [ ] Surface triage older than 48 hours, pending captures and Inbox/Ideas counts.
 - [ ] Add the initial nightly observations with scores, day/week deduplication, snooze/dismissal, auto-resolution and expiry.
 - [ ] Avoid N+1 queries with aggregate counts and eager loading. Paginate history from the start.
