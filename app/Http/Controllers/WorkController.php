@@ -58,6 +58,8 @@ class WorkController extends Controller
         $snapshot = $states->snapshot($request->user());
         $tasks = Task::forUser($request->user())->with(['domain', 'project']);
         $projects = Project::forUser($request->user())->with('domain')
+            ->withSum(['milestones as milestone_weight' => fn ($q) => $q->forUser($request->user())], 'weight')
+            ->withSum(['milestones as completed_milestone_weight' => fn ($q) => $q->forUser($request->user())->whereNotNull('completed_at')], 'weight')
             ->withCount(['tasks as open_tasks_count' => fn (Builder $query) => $query->forUser($request->user())->whereNull('completed_at')]);
         if (($filters['project_status'] ?? 'current') === 'trash') {
             $projects->onlyTrashed();
@@ -111,14 +113,14 @@ class WorkController extends Controller
 
     public function project(Request $request, int $project, WorkOptions $options, WaitTracking $waits, WorkStateResolver $states): Response
     {
-        $record = Project::forUser($request->user())->with('domain')->withCount([
+        $record = Project::forUser($request->user())->with(['domain', 'milestones' => fn ($q) => $q->forUser($request->user())->orderBy('sort_order')->orderBy('id')])->withCount([
             'tasks as open_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNull('completed_at'),
             'tasks as completed_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNotNull('completed_at'),
         ])->findOrFail($project);
         $record->setAttribute('work_state', $states->snapshot($request->user())['projects']->get($record->id));
         $filters = $request->validate(['status' => ['nullable', Rule::in(['open', 'completed'])]]);
         $waits->decorate($record->newCollection([$record]), $request->user());
-        $tasks = Task::forUser($request->user())->where('project_id', $record->id)
+        $tasks = Task::forUser($request->user())->with('milestone')->where('project_id', $record->id)
             ->when(($filters['status'] ?? 'open') === 'completed', fn (Builder $q) => $q->whereNotNull('completed_at'), fn (Builder $q) => $q->whereNull('completed_at'))
             ->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString();
         $waits->decorate($tasks->getCollection(), $request->user());

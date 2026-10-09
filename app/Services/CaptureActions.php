@@ -311,7 +311,7 @@ PROMPT;
                     'task' => Task::class, 'idea' => Note::class, 'project' => Project::class
                 };
                 $target = $class::withTrashed()->forUser($item->user_id)->lockForUpdate()->find($log->target_id);
-                if (! $target || $target->getRawOriginal() != $log->after_snapshot || ($target instanceof Project && $target->tasks()->withTrashed()->exists())) {
+                if (! $target || $target->getRawOriginal() != $log->after_snapshot || ($target instanceof Project && ($target->tasks()->withTrashed()->exists() || $target->milestones()->exists())) || ($target instanceof Task && $target->subtasks()->withTrashed()->exists())) {
                     throw ValidationException::withMessages(['undo' => 'This record has changed since capture. Edit it directly so newer work is preserved.']);
                 }
                 $target->delete();

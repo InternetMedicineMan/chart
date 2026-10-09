@@ -56,6 +56,9 @@ class ProjectController extends Controller
             if (ActivityLog::forUser($request->user())->where('subject_type', 'project')->where('subject_id', $record->id)->exists()) {
                 throw ValidationException::withMessages(['project' => 'This project has activity history. Keep it as Done or Dropped, or remove its activity entries before deleting it.']);
             }
+            if ($record->milestones()->exists()) {
+                throw ValidationException::withMessages(['project' => 'Remove this project’s milestones before deleting it, or keep the project as Done or Dropped.']);
+            }
             if ($record->tasks()->withTrashed()->exists()) {
                 throw ValidationException::withMessages(['project' => 'Move this project’s tasks to another project or choose No project first. Tasks in Recently deleted must be restored and moved too.']);
             }

@@ -6,6 +6,7 @@ use App\Http\Controllers\CaptureTokenController;
 use App\Http\Controllers\DailyPlanController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
+use App\Http\Controllers\MilestoneController;
 use App\Http\Controllers\NotificationFeedController;
 use App\Http\Controllers\ParserPreviewController;
 use App\Http\Controllers\ProjectController;
@@ -59,6 +60,10 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::patch('/projects/{project}/waiting', [WorkWaitController::class, 'project'])->name('projects.waiting');
         Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
         Route::post('/projects/{project}/restore', [ProjectController::class, 'restore'])->name('projects.restore');
+        Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
+        Route::post('/projects/{project}/milestones', [MilestoneController::class, 'store'])->name('milestones.store');
+        Route::put('/projects/{project}/milestones/{milestone}', [MilestoneController::class, 'update'])->name('milestones.update');
+        Route::delete('/projects/{project}/milestones/{milestone}', [MilestoneController::class, 'destroy'])->name('milestones.destroy');
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
         Route::patch('/tasks/{task}/waiting', [WorkWaitController::class, 'task'])->name('tasks.waiting');

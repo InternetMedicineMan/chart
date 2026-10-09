@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: voice/text capture now clears existing waits and sets today/tomorrow’s Top 3 and tomorrow’s focus, with review, stale-plan protection, notifications and seven-day undo. Basic recurring tasks and capture completion are implemented; missed dates are skipped on the original schedule, as approved by the owner. The owner has no pre-launch notes to import, so `capture:import` is deferred. Milestones/subtasks, extra touch targets, Calendar, observations and push alerts remain open.
+Latest checkpoint: weighted milestones, one-level subtasks, recurring checklists and extra domain/project touch targets are implemented. The owner chose to require all subtasks finished before parent completion. Capture completion uses the same checks and reversible touches. Voice planning and clear-wait actions remain available. The owner has no pre-launch notes to import. Remaining Phase 1 work includes additional parser actions, Briefing observations, Calendar, reminders/push and launch acceptance.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -327,6 +327,21 @@ Live Luna evaluation: **48/48** synthetic cases passed. The first run passed 47/
 Deployment: no new migration or Shortcut changes are needed for this checkpoint. Deploy code and built assets through Forge, refresh config/route caches, then `php artisan queue:restart`. The local capture worker was gracefully replaced with current code; scheduler configuration is unchanged. No push or production deployment was performed. Next work-model slice: milestones/subtasks and extra task touch targets, before the remaining Briefing observations and Calendar integration.
 
 
+## Milestones, subtasks and extra touch targets — October 9, 2026
+
+- Project pages now support milestone creation, editing, explicit completion/reopening, removal, order, due dates and integer weights (1–1,000). Progress is completed weight / total weight and appears on project pages and Bench. Empty projects have no invented percentage. A milestone’s completion does not automatically complete its tasks or reset cadence. Changes require the current revision; removal is blocked while live or deleted tasks still reference it.
+- Task titles link to a detail page with paginated subtasks. Add subtasks there or choose a parent in the task editor. This release supports one level: no cycles or nested parents. Subtasks inherit their parent’s domain, project and milestone; moving the parent updates even deleted children, so restoration cannot revive an old location. Parent deletion requires moving children out first.
+- **Owner decision:** all live subtasks must be finished before completing a parent. This applies to manual and voice completion and parser preview. Reopen/restore the parent before reopening/restoring a child. Deleting an unfinished child explicitly removes it from the completion requirement; restoring it under a completed parent is blocked.
+- Repeating parents produce a fresh, open checklist for the next scheduled occurrence. Child dates retain their calendar-day offset from the parent; waits are cleared, while notes, priority, milestone and extra touch settings carry forward. Repeat rules belong on the parent. Reopening/undoing the old occurrence removes generated work only if the successor and every generated child are unchanged and unplanned. Added, moved, edited, deleted, completed or planned children protect the next occurrence from removal.
+- The task editor can select one extra owned domain or project to touch on completion. Natural project/domain touches remain; overlapping targets are deduplicated. Recurrence carries the setting forward. Deleted targets are skipped, and invalid/foreign references are rejected. Manual reopening retains history, while capture undo reverses its precise touches and preserves later activity. People/content touch propagation remains deferred to those phases.
+- Existing capture creation undo now protects tasks with subtasks and projects with milestones. The migration adds private recurrence-child snapshots and backfills the new nullable task fields into existing capture, fallback and completion snapshots so deployment does not invalidate prior undo.
+
+Validation: **286 relevant PHP tests passed across focused runs**, including 30 new structure tests covering ownership, weighted records, revisions, parent guards, movement/deletion/restoration, repeat generation, changed/planned successors, extra touches and snapshot compatibility. Client/SSR builds, Pint, route-cache compilation/clear and diff checks passed. Isolated desktop and 390px browser checks covered 25% weighted progress, milestone reopening/removal, child creation with an extra touch, blocked parent completion, next recurring checklist and safe reopen, with no overflow or page errors. A test selector was corrected to use the milestone button’s accessible label before resuming the final browser steps. Local MySQL upgrade succeeded; migration rollback/reapply also succeeded against the separate SQLite preview after allowing its table rebuild outside a transaction. Preview server stopped. Existing DaisyUI CSS optimizer warnings are unchanged.
+
+Deployment: local migration applied and the local capture worker gracefully replaced; scheduler unchanged. Deploy code and built assets through Forge, run `php artisan migrate --force`, refresh the usual config/route caches, and run `php artisan queue:restart`. No new environment settings or Shortcut changes. No push or production deployment performed. No paid model calls were needed; existing parser command definitions are unchanged.
+
+This checkpoint supplies manual structure setup and integrates it with existing task capture completion. Voice milestone completion/assignment and subtask creation remain separate parser work; unsupported structures must be reviewed rather than silently created. Next: those parser actions and the remaining rule-based Briefing observations, followed by Calendar/reminder integration and real-use acceptance. Advanced recurrence patterns remain optional later work.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -428,12 +443,13 @@ Acceptance: one dump containing five unrelated items produces five individually 
 ### 4. Complete the work model and computed state
 
 - [x] Add manual task/project waits and expected response dates, person selection, hand-off timestamps and stale-edit protection. Basic priorities and due dates/times were already implemented.
-- [ ] Add milestones, subtasks, extra touch targets and advanced recurrence patterns.
+- [x] Add weighted milestones, one-level subtasks, recurring checklists and extra domain/project touch targets. Advanced recurrence remains below.
 - [x] Extend voice/text capture with reversible activity logging and waiting updates, exact existing-reference checks, manual review and stale-work protection.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
 - [x] Add manual activity entries with minutes, project/domain touch history and corrections, and monthly time totals.
 - [x] Extend voice/text capture to clearing waits, daily Top 3 and tomorrow’s focus with reviewed, reversible mutations.
-- [ ] Add extra task touch targets and later People/content propagation.
+- [x] Add extra task touch targets for domains/projects, including recurring tasks and capture undo.
+- [ ] Add later People/content touch propagation and voice milestone/subtask actions.
 - [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
 - [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
 - [x] Implement basic recurrence and voice/manual task completion with successor identity and safe undo; preserve later work and prevent duplicate occurrences or false cadence resets.
@@ -446,7 +462,7 @@ Acceptance: completing a task touches its intended subjects; overdue waits outra
 - [ ] Replace the SaaS dashboard with capped Briefing blocks, including honest empty states.
 - [x] Add Bench state filters, domain roll-ups and project state strips alongside existing tasks.
 - [x] Add activity history and monthly time totals to Bench/project views.
-- [ ] Add weighted milestone progress.
+- [x] Add weighted milestone progress to project pages and Bench.
 - [ ] Surface triage older than 48 hours, pending captures and Inbox/Ideas counts.
 - [ ] Add the initial nightly observations with scores, day/week deduplication, snooze/dismissal, auto-resolution and expiry.
 - [ ] Avoid N+1 queries with aggregate counts and eager loading. Paginate history from the start.

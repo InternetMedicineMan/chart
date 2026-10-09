@@ -16,6 +16,10 @@ class SaveTaskRequest extends FormRequest
     {
         return [
             'revision' => ['nullable', 'integer', 'min:0'],
+            'parent_task_id' => ['nullable', 'integer'],
+            'milestone_id' => ['nullable', 'integer'],
+            'touch_target_type' => ['nullable', Rule::in(['domain', 'project'])],
+            'touch_target_id' => ['nullable', 'integer'],
             'recurrence_rule' => ['nullable', 'string', 'max:500'],
             'title' => ['required', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:20000'],

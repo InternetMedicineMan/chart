@@ -8,20 +8,35 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\TaskCompletion;
 use App\Services\TaskRecurrence;
+use App\Services\TaskStructure;
+use App\Services\WaitTracking;
+use App\Services\WorkOptions;
 use App\Services\WorkSetup;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class TaskController extends Controller
 {
+    public function show(Request $request, int $task, WorkOptions $options, WaitTracking $waits): Response
+    {
+        $record = Task::forUser($request->user())->with(['domain', 'project', 'parentTask', 'milestone'])->findOrFail($task);
+        $children = $record->subtasks()->forUser($request->user())->orderBy('id')->paginate(20)->withQueryString();
+        $waits->decorate($children->getCollection(), $request->user());
+        $waits->decorate($record->newCollection([$record]), $request->user());
+
+        return Inertia::render('Work/Task', ['task' => $record, 'subtasks' => $children, 'options' => $options->forUser($request->user())]);
+    }
+
     public function store(SaveTaskRequest $request, WorkSetup $setup): RedirectResponse
     {
         DB::transaction(function () use ($request, $setup) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
-            $attributes = $this->attributes($request, $setup);
+            $attributes = app(TaskStructure::class)->attributes($request->user(), $this->attributes($request, $setup));
             $attributes = array_replace($attributes, app(TaskRecurrence::class)->attributes($request->user(), $attributes));
             Task::create($attributes + ['user_id' => $request->user()->id, 'source' => 'manual']);
         });
@@ -37,11 +52,13 @@ class TaskController extends Controller
             $attributes = $this->attributes($request, $setup) + ['needs_review' => false];
             $record = Task::forUser($request->user())->lockForUpdate()->findOrFail($task);
             app(TaskCompletion::class)->assertRevision($record, $request->input('revision'));
+            $attributes = app(TaskStructure::class)->attributes($request->user(), $attributes, $record);
             $recurrence = app(TaskRecurrence::class)->attributes($request->user(), $attributes, $record);
             if ($record->completed_at && $record->fill($recurrence)->isDirty()) {
                 throw ValidationException::withMessages(['recurrence_rule' => 'Edit the open next occurrence to change or stop this repeat.']);
             }
             $record->update(array_replace($attributes, $recurrence));
+            app(TaskStructure::class)->syncChildren($request->user(), $record);
         });
 
         return back()->with('message', 'Task updated.');
@@ -80,6 +97,9 @@ class TaskController extends Controller
         DB::transaction(function () use ($request, $task) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $record = Task::forUser($request->user())->lockForUpdate()->findOrFail($task);
+            if ($record->subtasks()->withTrashed()->exists()) {
+                throw ValidationException::withMessages(['task' => 'Move subtasks out of this parent before deleting it, including subtasks in Recently deleted.']);
+            }
             $record->update(['revision' => $record->revision + 1]);
             $record->delete();
         });
@@ -91,7 +111,9 @@ class TaskController extends Controller
     {
         DB::transaction(function () use ($request, $task) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
-            Task::onlyTrashed()->forUser($request->user())->lockForUpdate()->findOrFail($task)->restore();
+            $record = Task::onlyTrashed()->forUser($request->user())->lockForUpdate()->findOrFail($task);
+            app(TaskStructure::class)->assertCanReopen($request->user(), $record);
+            $record->restore();
         });
 
         return back()->with('message', 'Task restored.');

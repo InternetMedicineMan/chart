@@ -140,6 +140,7 @@ class CaptureWorkActions
 
     public function assertCompletion(Task $task, Capture $capture, array $chosen = [], bool $reviewed = false): void
     {
+        app(TaskStructure::class)->assertCanComplete(User::findOrFail($capture->user_id), $task);
         if ($capture->client_captured_at->isFuture()) {
             throw ValidationException::withMessages(['completed_at' => 'The recording time is in the future. Review its time before completing work.']);
         }

@@ -103,6 +103,12 @@ class ActivityTracking
         if ($task->project_id) {
             $this->touch($user, 'project', $task->project_id, 'completion', $task->id, $task->completed_at);
         }
+        $class = match ($task->touch_target_type) {
+            'domain' => Domain::class, 'project' => Project::class, default => null
+        };
+        if ($class && $class::forUser($user)->whereKey($task->touch_target_id)->exists()) {
+            $this->touch($user, $task->touch_target_type, $task->touch_target_id, 'completion', $task->id, $task->completed_at);
+        }
     }
 
     public function restoreCompletionTouches(User $user, int $taskId, array $previous): void
