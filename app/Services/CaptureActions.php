@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActionLog;
 use App\Models\Capture;
 use App\Models\CaptureItem;
+use App\Models\DailyPlan;
 use App\Models\Domain;
 use App\Models\Note;
 use App\Models\Person;
@@ -21,7 +22,9 @@ use Throwable;
 class CaptureActions
 {
     public const DEFINITIONS = [
-        'create_task' => 'A concrete thing to do. Use title, body for details, optional domain_ref/project_ref, due_date/due_time and priority (1 high to 4 low). No reminders, recurrence, waits or subtasks are supported yet.',
+        'create_task' => 'A concrete thing to do. Use title, body for details, optional domain_ref/project_ref, due_date/due_time and priority (1 high to 4 low). Use parent_ref for an existing open top-level parent task; subtasks inherit its project, domain and milestone. Use milestone_ref with project_ref to assign a new top-level task to an existing open milestone. No reminders, recurrence or waits are supported here.',
+        'complete_milestone' => 'Complete an existing open milestone using project_ref and milestone_ref. No task completion, activity, backdating, reopening or milestone creation; those requests need triage.',
+        'assign_milestone' => 'Assign an existing open top-level task to an existing open milestone in the same project. Use task_ref, project_ref and milestone_ref. Its subtasks inherit the assignment. No moving between projects, clearing assignments or assigning a child independently.',
         'capture_idea' => 'A thought to keep, not an obligation. Use body only; title, domain_ref, project_ref, dates, priority and lifecycle must be null. Unframed thoughts default to this action.',
         'create_project' => 'A project to build or start. Use title, body, domain_ref, target_date and lifecycle. Default lifecycle to someday; active only when explicitly asked to start now. An explicit someday intention to build or launch a named undertaking is a Someday project; a vague possibility or reflection remains an idea.',
         'log_activity' => 'Work already done on an EXISTING project or domain. Use body as the activity note (max 10000 characters), minutes only if stated, project_ref OR domain_ref, and optional activity_date/activity_time only when stated. Without an explicit time use the original recording time; a date alone uses the recording time of day. Copy the spoken subject reference, do not guess an expanded name. Never turn planned/future work into activity.',
@@ -45,6 +48,7 @@ class CaptureActions
             'priority' => $nullable('integer'), 'lifecycle' => ['type' => ['string', 'null'], 'enum' => ['active', 'someday', null]],
             'target_date' => $nullable('string'), 'reason' => $nullable('string'),
             'plan_date' => $nullable('string'), 'task_refs' => ['type' => ['array', 'null'], 'items' => ['type' => 'string'], 'maxItems' => 3],
+            'parent_ref' => $nullable('string'), 'milestone_ref' => $nullable('string'),
             'task_ref' => $nullable('string'), 'person_ref' => $nullable('string'), 'expected_by' => $nullable('string'),
             'minutes' => $nullable('integer'), 'activity_date' => $nullable('string'), 'activity_time' => $nullable('string'),
         ];
@@ -89,6 +93,7 @@ PROMPT;
             'lifecycle' => ['nullable', Rule::in(['active', 'someday'])],
             'plan_date' => ['nullable', 'required_if:type,set_top3,set_tomorrow_focus', 'date_format:Y-m-d'],
             'task_refs' => ['nullable', 'array', 'max:3'], 'task_refs.*' => ['required', 'string', 'max:255', 'distinct'],
+            'parent_ref' => ['nullable', 'string', 'max:255'], 'milestone_ref' => ['nullable', 'string', 'max:255'],
             'task_ref' => ['nullable', 'string', 'max:255'], 'person_ref' => ['nullable', 'string', 'max:100'],
             'expected_by' => ['nullable', 'date_format:Y-m-d'], 'minutes' => ['nullable', 'integer', 'between:1,1440'],
             'activity_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-02'], 'activity_time' => ['nullable', 'date_format:H:i'],
@@ -114,7 +119,9 @@ PROMPT;
             throw ValidationException::withMessages(['action' => 'This request contains fields that are not supported yet.']);
         }
         $fields = match ($data['type']) {
-            'create_task' => ['title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'priority'],
+            'create_task' => ['title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'priority', 'parent_ref', 'milestone_ref'],
+            'complete_milestone' => ['project_ref', 'domain_ref', 'milestone_ref'],
+            'assign_milestone' => ['task_ref', 'project_ref', 'domain_ref', 'milestone_ref'],
             'create_project' => ['title', 'body', 'domain_ref', 'lifecycle', 'target_date'],
             'capture_idea' => ['body'],
             'log_activity' => ['body', 'project_ref', 'domain_ref', 'minutes', 'activity_date', 'activity_time'],
@@ -146,7 +153,7 @@ PROMPT;
                 }
                 $chosenDomain = $correction['domain_id'] ?? null;
                 $chosenProject = $correction['project_id'] ?? null;
-                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision', 'top_task_ids', 'plan_revision']));
+                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision', 'top_task_ids', 'plan_revision', 'parent_task_id', 'parent_revision', 'milestone_id', 'milestone_revision']));
                 if ($correction) {
                     $correction = array_diff_key($correction, $chosen);
                 }
@@ -162,7 +169,9 @@ PROMPT;
                     throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing it.']);
                 }
                 $before = null;
-                if (in_array($data['type'], CapturePlanActions::TYPES, true)) {
+                if (app(CaptureStructureActions::class)->handles($data, $chosen)) {
+                    [$target, $type, $before] = app(CaptureStructureActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
+                } elseif (in_array($data['type'], CapturePlanActions::TYPES, true)) {
                     [$target, $type, $before] = app(CapturePlanActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
                 } elseif (in_array($data['type'], CaptureWorkActions::TYPES, true)) {
                     [$target, $type, $before] = app(CaptureWorkActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
@@ -247,6 +256,11 @@ PROMPT;
             if ($data['type'] === 'needs_triage' || $data['confidence'] < .6) {
                 throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing.']);
             }
+            if (app(CaptureStructureActions::class)->handles($data)) {
+                app(CaptureStructureActions::class)->prepare($user, $capture, $data);
+
+                return ['action' => $data, 'outcome' => 'would_file', 'domain' => null, 'project' => null, 'reason' => null];
+            }
             if (in_array($data['type'], CapturePlanActions::TYPES, true)) {
                 app(CapturePlanActions::class)->prepare($user, $capture, $data);
 
@@ -302,7 +316,9 @@ PROMPT;
             if (! $log || $log->executed_at->lt(now()->subDays(7))) {
                 throw ValidationException::withMessages(['undo' => 'Undo is available for seven days after filing.']);
             }
-            if (in_array($log->action_type, CapturePlanActions::TYPES, true)) {
+            if (in_array($log->action_type, CaptureStructureActions::TYPES, true)) {
+                app(CaptureStructureActions::class)->undo($user, $log);
+            } elseif (in_array($log->action_type, CapturePlanActions::TYPES, true)) {
                 app(CapturePlanActions::class)->undo($user, $log);
             } elseif (in_array($log->action_type, CaptureWorkActions::TYPES, true)) {
                 app(CaptureWorkActions::class)->undo($user, $log);
@@ -311,7 +327,7 @@ PROMPT;
                     'task' => Task::class, 'idea' => Note::class, 'project' => Project::class
                 };
                 $target = $class::withTrashed()->forUser($item->user_id)->lockForUpdate()->find($log->target_id);
-                if (! $target || $target->getRawOriginal() != $log->after_snapshot || ($target instanceof Project && ($target->tasks()->withTrashed()->exists() || $target->milestones()->exists())) || ($target instanceof Task && $target->subtasks()->withTrashed()->exists())) {
+                if (! $target || $target->getRawOriginal() != $log->after_snapshot || ($target instanceof Project && ($target->tasks()->withTrashed()->exists() || $target->milestones()->exists())) || ($target instanceof Task && ($target->subtasks()->withTrashed()->exists() || DailyPlan::forUser($user)->whereJsonContains('top_task_ids', $target->id)->exists()))) {
                     throw ValidationException::withMessages(['undo' => 'This record has changed since capture. Edit it directly so newer work is preserved.']);
                 }
                 $target->delete();

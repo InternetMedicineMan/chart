@@ -105,6 +105,33 @@
       },
       {
         "title": "PBE songs"
+      },
+      {
+        "title": "Launch checklist",
+        "project": {
+          "name": "Acme website"
+        },
+        "parent_task_id": null
+      }
+    ],
+    "milestones": [
+      {
+        "title": "Design approved",
+        "project": {
+          "name": "Acme website"
+        }
+      },
+      {
+        "title": "Launch ready",
+        "project": {
+          "name": "Acme website"
+        }
+      },
+      {
+        "title": "Design approved",
+        "project": {
+          "name": "Church platform"
+        }
       }
     ]
   },
@@ -773,6 +800,97 @@
         }
       ],
       "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "milestone_complete",
+      "text": "Complete the Design approved milestone in Acme website.",
+      "expected": [
+        {
+          "type": "complete_milestone",
+          "project_ref": "Acme website",
+          "milestone_ref": "Design approved"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "milestone_assign",
+      "text": "Assign the Launch checklist task in Acme website to the Launch ready milestone.",
+      "expected": [
+        {
+          "type": "assign_milestone",
+          "task_ref": "Launch checklist",
+          "project_ref": "Acme website",
+          "milestone_ref": "Launch ready"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "subtask_create",
+      "text": "Add Test checkout as a subtask under Launch checklist in Acme website.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title": "Test checkout",
+          "parent_ref": "Launch checklist",
+          "project_ref": "Acme website"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "task_milestone_create",
+      "text": "Add a task Test checkout to the Launch ready milestone in Acme website.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title": "Test checkout",
+          "milestone_ref": "Launch ready",
+          "project_ref": "Acme website"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "milestone_ambiguous",
+      "text": "Complete the Design approved milestone.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "milestone_backdated",
+      "text": "Mark Design approved in Acme website complete as of last Tuesday.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "milestone_create_unsupported",
+      "text": "Create a new milestone called Final polish in Acme website.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "milestone_reopen_unsupported",
+      "text": "Reopen the Design approved milestone in Acme website.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: reviewed milestone and subtask actions"
     }
   ]
 }

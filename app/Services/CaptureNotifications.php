@@ -17,7 +17,7 @@ class CaptureNotifications
             default => 'Idea saved',
         };
         $label = match ($log->action_type) {
-            'clear_waiting' => 'Waiting cleared', 'set_top3' => 'Top 3 updated', 'set_tomorrow_focus' => 'Tomorrow’s focus saved', 'complete_task' => 'Task completed', 'log_activity' => 'Activity logged', 'set_waiting' => 'Waiting on updated', default => $label,
+            'complete_milestone' => 'Milestone completed', 'assign_milestone' => 'Milestone assigned', 'clear_waiting' => 'Waiting cleared', 'set_top3' => 'Top 3 updated', 'set_tomorrow_focus' => 'Tomorrow’s focus saved', 'complete_task' => 'Task completed', 'log_activity' => 'Activity logged', 'set_waiting' => 'Waiting on updated', default => $label,
         };
         if (($log->payload['confidence'] ?? 1) < .8) {
             $label .= ' · check this';

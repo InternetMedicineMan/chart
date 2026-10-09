@@ -19,8 +19,8 @@ class WorkOptions
         return [
             'domains' => Domain::forUser($user)->orderByDesc('is_inbox')->orderBy('sort_order')->orderBy('name')->get(),
             'projects' => Project::forUser($user)->orderBy('name')->get(['id', 'name', 'domain_id', 'lifecycle', 'wait_revision', 'holder_person_id', 'wait_expected_by']),
-            'milestones' => Milestone::forUser($user)->orderBy('sort_order')->orderBy('id')->get(['id', 'project_id', 'title', 'completed_at']),
-            'parentTasks' => Task::forUser($user)->whereNull('parent_task_id')->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'milestone_id']),
+            'milestones' => Milestone::forUser($user)->orderBy('sort_order')->orderBy('id')->get(['id', 'project_id', 'title', 'completed_at', 'revision']),
+            'parentTasks' => Task::forUser($user)->whereNull('parent_task_id')->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'milestone_id', 'revision']),
             'people' => Person::forUser($user)->orderBy('name')->get(['id', 'name', 'company']),
             'timezone' => $timezone,
             'activityRequestKey' => Str::uuid()->toString(),

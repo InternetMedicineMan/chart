@@ -35,7 +35,7 @@ class CaptureController extends Controller
 
         $workOptions = $options->forUser($request->user());
         $workOptions['captureTimezone'] = $record->timezone;
-        $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'due_date', 'revision', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by']);
+        $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'due_date', 'revision', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by', 'parent_task_id', 'milestone_id']);
 
         $planDates = [$workOptions['today'], CarbonImmutable::parse($workOptions['today'])->addDay()->toDateString()];
         $plans = DailyPlan::forUser($request->user())->whereIn('plan_date', $planDates)->get()->keyBy(fn ($plan) => $plan->plan_date->toDateString());
