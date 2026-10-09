@@ -32,7 +32,7 @@ class CaptureController extends Controller
 
         $workOptions = $options->forUser($request->user());
         $workOptions['captureTimezone'] = $record->timezone;
-        $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by']);
+        $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'due_date', 'revision', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by']);
 
         return Inertia::render('Work/Capture', [
             'capture' => $record, 'options' => $workOptions,

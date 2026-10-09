@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class CaptureWorkActions
 {
-    public const TYPES = ['log_activity', 'set_waiting'];
+    public const TYPES = ['log_activity', 'set_waiting', 'complete_task'];
 
     public function resolve(User $user, array $data, array $chosen = [], bool $lock = false): array
     {
@@ -26,16 +26,16 @@ class CaptureWorkActions
         $projects = Project::forUser($user)->where('lifecycle', 'active')->whereIn('domain_id', $domains->pluck('id'))->when($domainId, fn ($q) => $q->where('domain_id', $domainId))->get();
         $projectId = $this->exact($data['project_ref'] ?? null, $projects, 'project', $chosen['project_id'] ?? null, false);
         $isTask = filled($data['task_ref'] ?? null) || ! empty($chosen['task_id']);
-        if ($data['type'] === 'set_waiting' && $isTask) {
+        if (in_array($data['type'], ['set_waiting', 'complete_task'], true) && $isTask) {
             $tasks = app(DailyPlanning::class)->activeTasks($user)->whereNull('completed_at')->when($projectId, fn ($q) => $q->where('project_id', $projectId))->when($domainId, fn ($q) => $q->where('domain_id', $domainId))->get(['id', 'title as name']);
             $id = $this->exact($data['task_ref'] ?? null, $tasks, 'task', $chosen['task_id'] ?? null);
             $subject = Task::forUser($user)->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($id);
-        } elseif ($projectId) {
+        } elseif ($projectId && $data['type'] !== 'complete_task') {
             $subject = Project::forUser($user)->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($projectId);
         } elseif ($data['type'] === 'log_activity' && $domainId) {
             $subject = Domain::forUser($user)->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($domainId);
         } else {
-            throw ValidationException::withMessages(['subject' => $data['type'] === 'set_waiting' ? 'Choose the existing task or project to put on hold.' : 'Choose the project or domain for this activity.']);
+            throw ValidationException::withMessages(['subject' => $data['type'] === 'set_waiting' ? 'Choose the existing task or project to put on hold.' : ($data['type'] === 'complete_task' ? 'Choose the existing task to complete.' : 'Choose the project or domain for this activity.')]);
         }
         $person = null;
         if ($data['type'] === 'set_waiting') {
@@ -69,13 +69,20 @@ class CaptureWorkActions
     public function execute(User $user, Capture $capture, array $data, array $chosen, bool $reviewed): array
     {
         if (! $reviewed && $data['confidence'] < .8) {
-            throw ValidationException::withMessages(['action' => 'Review this activity or hand-off before changing your work.']);
+            throw ValidationException::withMessages(['action' => 'Review this action before changing your work.']);
         }
         [$subject, $person] = $this->resolve($user, $data, $chosen, true);
         if ($data['type'] === 'log_activity') {
             $target = app(ActivityTracking::class)->capture($user, $subject, $data['body'], $data['minutes'] ?? null, $this->activityTime($capture, $data));
 
             return [$target, 'activity', null];
+        }
+        if ($data['type'] === 'complete_task') {
+            $this->assertCompletion($subject, $capture, $chosen, $reviewed);
+            $before = $subject->getRawOriginal();
+            app(TaskCompletion::class)->complete($user, $subject, $capture->client_captured_at);
+
+            return [$subject->fresh(), 'task', $before];
         }
         $this->assertCurrentWait($subject, $capture, $chosen, $reviewed);
         $before = $subject->getRawOriginal();
@@ -114,6 +121,21 @@ class CaptureWorkActions
         }
     }
 
+    public function assertCompletion(Task $task, Capture $capture, array $chosen = [], bool $reviewed = false): void
+    {
+        if ($capture->client_captured_at->isFuture()) {
+            throw ValidationException::withMessages(['completed_at' => 'The recording time is in the future. Review its time before completing work.']);
+        }
+        if ($reviewed) {
+            if (! isset($chosen['task_revision']) || (int) $chosen['task_revision'] !== $task->revision) {
+                throw ValidationException::withMessages(['revision' => 'This task changed while you were reviewing. Reload and choose it again.']);
+            }
+        } elseif ($task->updated_at->gte($capture->client_captured_at->startOfSecond())
+            || ($task->recurrence_rule && $task->due_date->toDateString() > $capture->client_captured_at->setTimezone($task->recurrence_timezone)->toDateString())) {
+            throw ValidationException::withMessages(['revision' => 'This task changed after recording or is a future repeat. Review the exact occurrence before completing it.']);
+        }
+    }
+
     public function undo(User $user, ActionLog $log): void
     {
         if ($log->action_type === 'log_activity') {
@@ -124,6 +146,11 @@ class CaptureWorkActions
         }
         if (! $target || $target->getRawOriginal() != $log->after_snapshot) {
             throw ValidationException::withMessages(['undo' => 'This record changed after capture. Keep newer work by editing it directly.']);
+        }
+        if ($log->action_type === 'complete_task') {
+            app(TaskCompletion::class)->reopen($user, $target, true);
+
+            return;
         }
         if ($target instanceof ActivityLog) {
             app(ActivityTracking::class)->delete($user, $target->id, $target->revision);

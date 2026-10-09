@@ -80,6 +80,22 @@
         "project": {
           "name": "Church platform"
         }
+      },
+      {
+        "title": "Write this week's article",
+        "project": {
+          "name": "Church platform"
+        },
+        "due_date": "2026-10-08",
+        "recurrence_rule": "FREQ=WEEKLY;INTERVAL=1"
+      },
+      {
+        "title": "Send invoice",
+        "project": {
+          "name": "Acme website"
+        },
+        "due_date": "2026-10-08",
+        "recurrence_rule": null
       }
     ]
   },
@@ -182,10 +198,11 @@
       "text": "Wrote this week's article",
       "expected": [
         {
-          "type": "needs_triage"
+          "type": "complete_task",
+          "task_ref": "Write this week's article"
         }
       ],
-      "capability": "deferred: completion and recurrence"
+      "capability": "implemented: existing recurring task completion"
     },
     {
       "id": "calendar",
@@ -575,6 +592,73 @@
         }
       ],
       "capability": "deferred: clearing waits"
+    },
+    {
+      "id": "explicit_completion",
+      "text": "Mark Send invoice for Acme website done.",
+      "expected": [
+        {
+          "type": "complete_task",
+          "task_ref": "Send invoice",
+          "project_ref": "Acme website"
+        }
+      ],
+      "capability": "implemented"
+    },
+    {
+      "id": "partial_progress",
+      "text": "Log activity on Church platform: I started the article but it is not finished yet.",
+      "expected": [
+        {
+          "type": "log_activity",
+          "project_ref": "Church platform"
+        }
+      ],
+      "capability": "implemented: activity is not completion"
+    },
+    {
+      "id": "backdated_completion",
+      "text": "I finished Send invoice yesterday; mark it complete as of yesterday.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: explicit completion backdating"
+    },
+    {
+      "id": "create_recurring",
+      "text": "Create a task to write an article every Friday.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "deferred: voice recurrence setup; manual setup available"
+    },
+    {
+      "id": "completion_dump",
+      "text": "Mark Send invoice for Acme website done. Log 30 minutes on Church platform: tested audio. Buy milk.",
+      "expected": [
+        {
+          "type": "complete_task",
+          "task_ref": "Send invoice",
+          "project_ref": "Acme website"
+        },
+        {
+          "type": "log_activity",
+          "project_ref": "Church platform",
+          "minutes": 30
+        },
+        {
+          "type": "create_task",
+          "title_contains": "milk"
+        }
+      ],
+      "capability": "implemented",
+      "context": {
+        "mode": "dump"
+      }
     }
   ]
 }

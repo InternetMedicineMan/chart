@@ -17,7 +17,7 @@ class CaptureNotifications
             default => 'Idea saved',
         };
         $label = match ($log->action_type) {
-            'log_activity' => 'Activity logged', 'set_waiting' => 'Waiting on updated', default => $label,
+            'complete_task' => 'Task completed', 'log_activity' => 'Activity logged', 'set_waiting' => 'Waiting on updated', default => $label,
         };
         if (($log->payload['confidence'] ?? 1) < .8) {
             $label .= ' · check this';

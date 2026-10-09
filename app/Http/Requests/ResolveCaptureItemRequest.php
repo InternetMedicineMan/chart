@@ -24,6 +24,7 @@ class ResolveCaptureItemRequest extends FormRequest
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $this->user()->id)->where('lifecycle', 'active')->whereNull('deleted_at')],
             'task_id' => ['nullable', 'integer', Rule::exists('tasks', 'id')->where('user_id', $this->user()->id)->whereNull('deleted_at')->whereNull('completed_at')],
             'person_id' => ['nullable', 'integer', Rule::exists('people', 'id')->where('user_id', $this->user()->id)->whereNull('deleted_at')],
+            'task_revision' => ['nullable', 'integer', 'min:0'],
             'work_revision' => ['nullable', 'integer', 'min:0'],
             'task_ref' => ['nullable', 'string', 'max:255'], 'person_ref' => ['nullable', 'string', 'max:100'],
             'expected_by' => ['nullable', 'date_format:Y-m-d'], 'minutes' => ['nullable', 'integer', 'between:1,1440'],

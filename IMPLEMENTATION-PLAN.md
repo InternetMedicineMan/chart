@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: capture now logs project/domain activity and sets existing task/project waits, with exact reference matching, review, stale-work protection and seven-day undo. Manual activity, monthly time totals, shared computed states, waits and daily planning are implemented. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
+Latest checkpoint: task completion now works through voice/text capture, and the task editor supports basic recurring schedules with safe successor generation and undo. Missed dates are skipped on the original schedule, as approved by the owner. Activity/waiting capture, manual daily planning, monthly time totals and shared computed states are implemented. The owner has no pre-launch notes to import, so `capture:import` is deferred. Push alerts and Watch offline recovery remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -293,6 +293,23 @@ Live synthetic evaluation: the full 36-case Luna run passed 35/36. Its remaining
 
 Deployment: the additive snapshot migration is applied to local MySQL. The local capture worker had stopped and was started with current code; the existing scheduler remains running. Deploy source and built assets through Forge, then run `php artisan migrate --force`, refresh the normal config/route caches, and run `php artisan queue:restart` so supervised workers load the new action registry. No environment or scheduler changes are required. No push or production deployment was performed.
 
+## Task completion and basic recurrence — October 9, 2026
+
+The owner approved **skipping missed dates while keeping the original schedule**. Manual completion and `complete_task` capture now share one transactional service. The task editor has Repeat controls for daily, weekly, monthly and yearly schedules, every 1–365 units, with an optional inclusive end date. Set a due date to anchor a repeat; change or stop it on the open occurrence.
+
+- This release supports the date-based RRULE subset `FREQ`, `INTERVAL`, and `UNTIL`. Advanced `BYDAY`/ordinal patterns, `COUNT`, exceptions and voice creation/editing of recurrence remain deferred. Unsupported clauses are rejected, never silently discarded. Calendar-date generation preserves the anchor and timezone, skips impossible month dates/leap-day years and invalid local DST times, and does not drift after late completion. These semantics follow the supported portions of [RFC 5545 recurrence rules](https://www.rfc-editor.org/rfc/rfc5545#section-3.3.10); this is not a general iCalendar recurrence implementation.
+- Completing a repeat creates at most one next occurrence after both its current due date and today in the stored schedule timezone. A late offline upload retains its original completion time but advances the next task past the upload day, preventing a backlog. The new occurrence copies task details and schedule, clears waits/completion, and does not inherit Top 3 membership. Ending the schedule creates no successor.
+- A unique parent-occurrence key and owner/task locks prevent duplicate successors. Task revisions reject stale edits and completion commands; hand-offs, edits, project moves and deletion/restoration change the revision. Daily-plan writes share the owner lock so successor removal cannot race Top 3 selection.
+- Capture requires a unique owned active/open task, confidence of at least 0.8 and an unchanged task since recording. Future recurring occurrences require explicit review, which also checks the selected task revision. Clear past-tense statements can resolve to a unique known task title. Ambiguous references, partial work and explicitly backdated completion remain in review. The original words, factual filing confirmation, notification and seven-day undo use the existing capture path; Shortcuts need no changes.
+- Completion stores prior task/wait fields, touch records and the exact generated successor snapshot. Capture undo reopens the original, restores its wait, removes only its own completion touch and restores any earlier completion touch, preserving later activity. Manual reopen preserves historical touch, matching prior behavior. Either operation removes the generated next occurrence only if untouched and absent from every daily plan. Edited, completed, deleted or planned successors block reversal, preserving newer work. An already completed request is a no-op; replayed recordings cannot complete the generated future occurrence.
+- The additive migration adds recurrence/revision columns and private completion history. Existing task action-log before/after snapshots and capture fallback snapshots are backfilled with column defaults, preserving pre-upgrade undo/recovery. A migration rollback test caught and corrected unique-index removal ordering. No new dependency, environment setting or scheduled job was introduced.
+
+Validation: 218 relevant PHP tests passed across focused runs (2,181 assertions), including 34 recurrence/completion cases covering generation, retry, reopen/undo, stale changes, existing wait restoration, earlier/later touches, ownership, timezone changes, delayed uploads, calendar boundaries, migration compatibility and rollback. Client/SSR builds, Pint, route-cache compile/clear and diff checks passed. Desktop and 390px browser checks verified repeat interval setup, one future successor, reopen, phone capture review/completion/undo, completed-task navigation, stopping a repeat and no overflow/page errors. The browser test was resumed after replacing an early URL assertion with a navigation wait; no application defect was involved. The isolated preview server is stopped. Existing DaisyUI CSS optimizer warnings remain non-blocking.
+
+Live evaluation: GPT-6 Luna passed **41/41** synthetic cases in one run, including completion, ambiguous completion, partial activity, unsupported backdating/voice recurrence setup and mixed dumps. Report: `storage/app/private/parser-evals/20261009-164440-927bb993-aa84-43d7-b3fc-caf8456a13e2.json`; prompt SHA-256 `9e3e32f7f0ec922d31a3d5eed1e9a935854a3da52cc899cbb56105586729d930`; 58,115 input and 10,978 output tokens. No owner data was sent for this evaluation and no work records were created. Synthetic results are regression evidence, not a real-device accuracy guarantee.
+
+Deployment: local MySQL migration completed and the local capture worker was gracefully replaced with current code; the existing scheduler is unchanged. Deploy code and built assets through Forge, run `php artisan migrate --force`, refresh normal config/route caches, then `php artisan queue:restart`. No push or production deployment was performed. Next capture slices are clearing waits and daily planning; milestones/subtasks, extra touch targets and advanced recurrence remain open.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -394,14 +411,15 @@ Acceptance: one dump containing five unrelated items produces five individually 
 ### 4. Complete the work model and computed state
 
 - [x] Add manual task/project waits and expected response dates, person selection, hand-off timestamps and stale-edit protection. Basic priorities and due dates/times were already implemented.
-- [ ] Add milestones, subtasks, recurring tasks and extra touch targets.
+- [ ] Add milestones, subtasks, extra touch targets and advanced recurrence patterns.
 - [x] Extend voice/text capture with reversible activity logging and waiting updates, exact existing-reference checks, manual review and stale-work protection.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
 - [x] Add manual activity entries with minutes, project/domain touch history and corrections, and monthly time totals.
 - [ ] Add extra task touch targets and later People/content propagation; extend parser actions to daily planning with reversible mutations.
 - [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
 - [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
-- [ ] Implement recurrence and completion/undo together so retries and undo cannot create extra occurrences or false cadence resets.
+- [x] Implement basic recurrence and voice/manual task completion with successor identity and safe undo; preserve later work and prevent duplicate occurrences or false cadence resets.
+- [ ] Add advanced RRULE clauses, exception dates, and voice recurrence setup when needed.
 
 Acceptance: completing a task touches its intended subjects; overdue waits outrank ordinary due work; parked/someday items stay out of attention lists; exactly three tasks can be selected for a day; state updates after edits, not only after touches. Date-boundary tests cover Chicago evening timestamps and DST.
 

@@ -105,6 +105,20 @@ class ActivityTracking
         }
     }
 
+    public function restoreCompletionTouches(User $user, int $taskId, array $previous): void
+    {
+        $query = DB::table('work_touches')->where('user_id', $user->id)->where('origin_type', 'completion')->where('origin_id', $taskId);
+        $subjects = $query->get()->map(fn ($row) => (array) $row)->merge($previous);
+        $query->delete();
+        foreach ($previous as $touch) {
+            unset($touch['id']);
+            DB::table('work_touches')->insert($touch);
+        }
+        foreach ($subjects as $subject) {
+            $this->refresh($user, $subject['subject_type'], $subject['subject_id']);
+        }
+    }
+
     private function touch(User $user, string $type, int $id, string $origin, int $originId, $occurred): void
     {
         DB::table('work_touches')->updateOrInsert(['user_id' => $user->id, 'subject_type' => $type, 'subject_id' => $id, 'origin_type' => $origin, 'origin_id' => $originId], ['occurred_at' => $occurred]);

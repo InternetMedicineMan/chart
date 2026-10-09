@@ -25,8 +25,9 @@ class CaptureActions
         'capture_idea' => 'A thought to keep, not an obligation. Use body only; title, domain_ref, project_ref, dates, priority and lifecycle must be null. Unframed thoughts default to this action.',
         'create_project' => 'A project to build or start. Use title, body, domain_ref, target_date and lifecycle. Default lifecycle to someday; active only when explicitly asked to start now.',
         'log_activity' => 'Work already done on an EXISTING project or domain. Use body as the activity note (max 10000 characters), minutes only if stated, project_ref OR domain_ref, and optional activity_date/activity_time only when stated. Without an explicit time use the original recording time; a date alone uses the recording time of day. Copy the spoken subject reference, do not guess an expanded name. Never turn planned/future work into activity.',
-        'set_waiting' => 'Put an EXISTING open task or active project on hold for an EXISTING person. Use task_ref (with optional project_ref to narrow it) OR project_ref, person_ref, and optional expected_by date. Copy references as spoken, never guess a full name or create a work item. If the subject is missing, preserve it for review. Clearing waits and completion are not supported yet.',
-        'needs_triage' => 'An unclear request or an unsupported action (including completion, calendar, reminders, clearing waits, interactions, people facts, Top 3, setting today/tomorrow focus, book/Library records and saving book quotes). Preserve the full excerpt and explain what needs a decision in reason. Never silently downgrade an unsupported request to a task or idea. A daily focus statement is not a new task or a deadline.',
+        'set_waiting' => 'Put an EXISTING open task or active project on hold for an EXISTING person. Use task_ref (with optional project_ref to narrow it) OR project_ref, person_ref, and optional expected_by date. Copy references as spoken, never guess a full name or create a work item. If the subject is missing, preserve it for review. Clearing waits is not supported yet; completing a task is a separate complete_task action.',
+        'complete_task' => 'Complete ONE existing open task. Use task_ref, optionally project_ref/domain_ref to disambiguate. For a clear past-tense statement, use the unique matching task title from context; never guess between matches. No new task, project completion, recurrence edits, partial progress or future intentions. An explicitly backdated completion needs_triage; otherwise completion uses the recording time.',
+        'needs_triage' => 'An unclear request or an unsupported action (including backdated or project completion, calendar, reminders, clearing waits, interactions, people facts, Top 3, setting today/tomorrow focus, book/Library records and saving book quotes). Preserve the full excerpt and explain what needs a decision in reason. Never silently downgrade an unsupported request to a task or idea. A daily focus statement is not a new task or a deadline.',
     ];
 
     public function schema(): array
@@ -62,7 +63,7 @@ Split into independent items first, then classify each. Preserve every substanti
 
 An excerpt is a verbatim contiguous span of the original text covering the COMPLETE item, not just its title. Include introductory wording, filler, qualifiers and following sentences that modify that item. Every word should be covered by an excerpt; uncovered words are sent to review by the server. For a single item, copy the entire input as its excerpt. For adjacent repetitions of one item, use one combined excerpt covering both. For repetitions separated by unrelated items, emit the same action fields with each occurrence's excerpt; the server merges exact duplicate actions. Never include an unrelated item in another item's excerpt.
 
-References must be text names, not IDs; the server resolves them. Missing project and domain means Inbox only for create_task/create_project; log_activity and set_waiting require a named existing subject. Never select an ambiguous reference from context. Activity or waiting confidence below 0.8 requires review. Dates are YYYY-MM-DD and times HH:MM in the supplied timezone, relative to client_captured_at (not retry time). This weekend means Saturday. If a date, reference, AM/PM or intention is uncertain, use needs_triage. No task verb, date or project generally means an idea. Never invent deadlines. Confidence below 0.6 is triage; 0.6–0.8 is filed with review. Only populate fields explicitly allowed by the action description; use null for all other fields.
+References must be text names, not IDs; the server resolves them. Missing project and domain means Inbox only for create_task/create_project; log_activity, set_waiting and complete_task require a named existing subject. Never select an ambiguous reference from context. Activity, waiting or completion confidence below 0.8 requires review. Dates are YYYY-MM-DD and times HH:MM in the supplied timezone, relative to client_captured_at (not retry time). This weekend means Saturday. If a date, reference, AM/PM or intention is uncertain, use needs_triage. No task verb, date or project generally means an idea. Never invent deadlines. Confidence below 0.6 is triage; 0.6–0.8 is filed with review. Only populate fields explicitly allowed by the action description; use null for all other fields.
 
 Supported actions:
 {$actions}
@@ -105,6 +106,7 @@ PROMPT;
             'create_project' => ['title', 'body', 'domain_ref', 'lifecycle', 'target_date'],
             'capture_idea' => ['body'],
             'log_activity' => ['body', 'project_ref', 'domain_ref', 'minutes', 'activity_date', 'activity_time'],
+            'complete_task' => ['task_ref', 'project_ref', 'domain_ref'],
             'set_waiting' => ['task_ref', 'project_ref', 'domain_ref', 'person_ref', 'expected_by'],
             default => ['title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'priority', 'lifecycle', 'target_date', 'task_ref', 'person_ref', 'expected_by', 'minutes', 'activity_date', 'activity_time'],
         };
@@ -129,7 +131,7 @@ PROMPT;
                 }
                 $chosenDomain = $correction['domain_id'] ?? null;
                 $chosenProject = $correction['project_id'] ?? null;
-                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision']));
+                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision']));
                 if ($correction) {
                     $correction = array_diff_key($correction, $chosen);
                 }
@@ -147,6 +149,9 @@ PROMPT;
                 $before = null;
                 if (in_array($data['type'], CaptureWorkActions::TYPES, true)) {
                     [$target, $type, $before] = app(CaptureWorkActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
+                    if ($data['type'] === 'complete_task') {
+                        $data['task_ref'] = $target->title;
+                    }
                 } else {
                     [$domain, $project] = $this->targets($user, $data, $chosenDomain, $chosenProject, true);
                     if ($data['type'] !== 'capture_idea' && ! $domain) {
@@ -227,12 +232,14 @@ PROMPT;
             }
             if (in_array($data['type'], CaptureWorkActions::TYPES, true)) {
                 if ($data['confidence'] < .8) {
-                    throw ValidationException::withMessages(['action' => 'Review this activity or hand-off before changing work.']);
+                    throw ValidationException::withMessages(['action' => 'Review this action before changing work.']);
                 }
                 $workActions = app(CaptureWorkActions::class);
                 [$subject] = $workActions->resolve($user, $data);
                 if ($data['type'] === 'log_activity') {
                     $workActions->activityTime($capture, $data);
+                } elseif ($data['type'] === 'complete_task') {
+                    $workActions->assertCompletion($subject, $capture);
                 } else {
                     $workActions->assertCurrentWait($subject, $capture);
                 }

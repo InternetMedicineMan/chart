@@ -40,6 +40,7 @@ class DailyPlanning
     public function save(User $user, array $data): void
     {
         DB::transaction(function () use ($user, $data) {
+            User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             if ($data['plan_date'] !== app(LocalDate::class)->today($user)) {
                 throw ValidationException::withMessages(['plan_date' => 'The local day has changed. Reload the plan before saving.']);
             }

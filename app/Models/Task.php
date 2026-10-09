@@ -12,7 +12,16 @@ class Task extends Model
 {
     use OwnedByUser, SoftDeletes;
 
-    protected $casts = ['source' => TaskSource::class, 'due_date' => 'date:Y-m-d', 'completed_at' => 'datetime', 'needs_review' => 'boolean', 'priority' => 'integer', 'waiting_since' => 'datetime', 'wait_expected_by' => 'date:Y-m-d', 'wait_revision' => 'integer'];
+    protected $casts = ['revision' => 'integer', 'recurrence_anchor' => 'date:Y-m-d', 'recurrence_index' => 'integer', 'source' => TaskSource::class, 'due_date' => 'date:Y-m-d', 'completed_at' => 'datetime', 'needs_review' => 'boolean', 'priority' => 'integer', 'waiting_since' => 'datetime', 'wait_expected_by' => 'date:Y-m-d', 'wait_revision' => 'integer'];
+
+    protected static function booted(): void
+    {
+        static::updating(function (Task $task) {
+            if ($task->isDirty()) {
+                $task->revision = (int) $task->getOriginal('revision') + 1;
+            }
+        });
+    }
 
     public function waitingPerson(): BelongsTo
     {

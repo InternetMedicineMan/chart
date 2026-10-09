@@ -15,6 +15,8 @@ class SaveTaskRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'revision' => ['nullable', 'integer', 'min:0'],
+            'recurrence_rule' => ['nullable', 'string', 'max:500'],
             'title' => ['required', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:20000'],
             'domain_id' => ['nullable', 'integer', Rule::exists('domains', 'id')->where('user_id', $this->user()->id)->whereNull('deleted_at')->whereNull('archived_at')],

@@ -7,10 +7,12 @@ const emit = defineEmits(['close']);
 const dialog = ref(null);
 const confirmingDelete = ref(false);
 const item = props.record || {};
+const repeatParts = Object.fromEntries((item.recurrence_rule || '').split(';').filter(Boolean).map(part => part.split('=')));
 const form = useForm(props.kind === 'task' ? {
     title: item.title || '', notes: item.notes || '', domain_id: item.domain_id || props.domainId || '',
     project_id: item.project_id || props.projectId || '', priority: item.priority || 4,
-    due_date: item.due_date || '', due_time: item.due_time?.slice(0, 5) || '',
+    due_date: item.due_date || '', due_time: item.due_time?.slice(0, 5) || '', revision: item.revision ?? 0,
+    repeat: repeatParts.FREQ || '', repeat_interval: Number(repeatParts.INTERVAL || 1), repeat_until: repeatParts.UNTIL?.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') || '',
 } : props.kind === 'project' ? {
     name: item.name || '', description: item.description || '', domain_id: item.domain_id || props.domainId || '',
     type: item.type || 'target_date', lifecycle: item.lifecycle || 'active', target_date: item.target_date || '',
@@ -23,6 +25,11 @@ const title = computed(() => `${item.id ? 'Edit' : 'New'} ${props.kind}`);
 const close = () => { if (!form.processing) emit('close'); };
 const submit = () => {
     const names = { task: 'tasks', project: 'projects', domain: 'domains', idea: 'ideas' };
+    form.transform(data => {
+        if (props.kind !== 'task') return data;
+        const { repeat, repeat_interval, repeat_until, ...task } = data;
+        return { ...task, recurrence_rule: repeat ? `FREQ=${repeat};INTERVAL=${repeat_interval}${repeat_until ? `;UNTIL=${repeat_until.replaceAll('-', '')}` : ''}` : null };
+    });
     form[item.id ? 'put' : 'post'](route(`${names[props.kind]}.${item.id ? 'update' : 'store'}`, item.id), {
         preserveScroll: true, onSuccess: () => emit('close'),
     });
@@ -48,6 +55,12 @@ onMounted(() => dialog.value.showModal());
                     <template v-if="kind === 'task'">
                         <div class="grid grid-cols-2 gap-4"><label class="work-label">Due date<input v-model="form.due_date" type="date" class="work-input" /></label><label class="work-label">Due time<input v-model="form.due_time" type="time" class="work-input" /></label></div>
                         <p class="text-xs text-base-content/55">Times use {{ options.timezone }}.</p>
+                        <fieldset class="space-y-3 rounded-xl border border-base-300 p-4" :disabled="!!item.completed_at">
+                            <legend class="px-1 text-sm font-semibold">Repeat</legend>
+                            <label class="work-label">Frequency<select v-model="form.repeat" class="work-input"><option value="">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select></label>
+                            <template v-if="form.repeat"><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="work-label">Every<input v-model="form.repeat_interval" type="number" min="1" max="365" required class="work-input" /><span class="text-xs font-normal">{{ { DAILY: 'day(s)', WEEKLY: 'week(s)', MONTHLY: 'month(s)', YEARLY: 'year(s)' }[form.repeat] }}</span></label><label class="work-label">End date (optional)<input v-model="form.repeat_until" type="date" class="work-input" :min="form.due_date" /></label></div><p class="text-xs leading-relaxed text-base-content/60">The due date anchors the schedule. Completing creates one next occurrence, skipping missed dates. Dates that don’t exist in a month are skipped. Repeats use {{ item.recurrence_timezone || options.timezone }}.</p></template>
+                        </fieldset>
+                        <p v-if="item.completed_at && item.recurrence_rule" class="text-xs text-base-content/55">Change or stop the repeat on its open next occurrence.</p>
                         <label class="work-label">Priority<select v-model="form.priority" class="work-input"><option :value="4">Low</option><option :value="3">Normal</option><option :value="2">High</option><option :value="1">Urgent</option></select></label>
                     </template>
                     <template v-if="kind === 'project'">

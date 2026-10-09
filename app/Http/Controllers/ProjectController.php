@@ -39,7 +39,7 @@ class ProjectController extends Controller
                 app(WaitTracking::class)->clear($record);
             }
             // Include deleted tasks so restoring one cannot put it under the project's former domain.
-            Task::withTrashed()->forUser($request->user())->where('project_id', $record->id)->update(['domain_id' => $record->domain_id]);
+            Task::withTrashed()->forUser($request->user())->where('project_id', $record->id)->update(['domain_id' => $record->domain_id, 'revision' => DB::raw('revision + 1')]);
         });
 
         return back()->with('message', 'Project updated.');
