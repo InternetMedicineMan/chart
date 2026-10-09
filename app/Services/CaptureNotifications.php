@@ -16,6 +16,9 @@ class CaptureNotifications
             'project' => ($log->payload['lifecycle'] ?? 'someday') === 'someday' ? 'Someday project added' : 'Project added',
             default => 'Idea saved',
         };
+        $label = match ($log->action_type) {
+            'log_activity' => 'Activity logged', 'set_waiting' => 'Waiting on updated', default => $label,
+        };
         if (($log->payload['confidence'] ?? 1) < .8) {
             $label .= ' · check this';
         }
@@ -23,7 +26,7 @@ class CaptureNotifications
         FeedNotification::forUser($log->user_id)->firstOrCreate(['dedup_key' => 'action:'.$log->id], [
             'user_id' => $log->user_id, 'capture_id' => $log->capture_id, 'action_log_id' => $log->id,
             'type' => 'capture_filed', 'title' => $label,
-            'body' => Str::limit($log->payload['title'] ?? $log->payload['body'] ?? '', 500),
+            'body' => Str::limit($log->payload['title'] ?? $log->payload['body'] ?? $log->payload['excerpt'] ?? '', 500),
             'undo_payload' => ['capture_item_id' => $log->capture_item_id],
         ]);
     }

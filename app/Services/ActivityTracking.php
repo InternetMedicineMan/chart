@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ActivityTracking
@@ -57,6 +58,21 @@ class ActivityTracking
                 $this->touch($user, 'project', $subject->id, 'activity', $record->id, $occurred->utc());
             }
         });
+    }
+
+    /** Capture execution owns the transaction and owner lock. */
+    public function capture(User $user, Domain|Project $subject, string $entry, ?int $minutes, CarbonImmutable $occurred): ActivityLog
+    {
+        $type = $subject instanceof Project ? 'project' : 'domain';
+        $domainId = $subject instanceof Project ? $subject->domain_id : $subject->id;
+        $record = ActivityLog::create(['user_id' => $user->id, 'subject_type' => $type, 'subject_id' => $subject->id, 'domain_id' => $domainId,
+            'entry' => $entry, 'minutes' => $minutes, 'occurred_at' => $occurred, 'source' => 'capture', 'request_key' => Str::uuid()->toString()]);
+        $this->touch($user, 'domain', $domainId, 'activity', $record->id, $occurred);
+        if ($type === 'project') {
+            $this->touch($user, 'project', $subject->id, 'activity', $record->id, $occurred);
+        }
+
+        return $record->fresh();
     }
 
     public function delete(User $user, int $id, int $revision): void

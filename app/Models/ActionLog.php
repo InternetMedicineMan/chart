@@ -9,5 +9,5 @@ class ActionLog extends Model
 {
     use OwnedByUser;
 
-    protected $casts = ['payload' => 'array', 'after_snapshot' => 'array', 'executed_at' => 'datetime', 'undone_at' => 'datetime'];
+    protected $casts = ['payload' => 'array', 'before_snapshot' => 'array', 'after_snapshot' => 'array', 'executed_at' => 'datetime', 'undone_at' => 'datetime'];
 }

@@ -18,7 +18,7 @@ class ActivityController extends Controller
 {
     public function index(Request $request, WorkOptions $options): Response
     {
-        $filters = $request->validate(['subject_type' => ['nullable', Rule::in(['project', 'domain'])], 'subject_id' => ['nullable', 'integer', 'required_with:subject_type']]);
+        $filters = $request->validate(['entry' => ['nullable', 'integer'], 'subject_type' => ['nullable', Rule::in(['project', 'domain'])], 'subject_id' => ['nullable', 'integer', 'required_with:subject_type']]);
         $type = $filters['subject_type'] ?? null;
         $id = $filters['subject_id'] ?? null;
         $subject = null;
@@ -26,7 +26,7 @@ class ActivityController extends Controller
             $class = $type === 'project' ? Project::class : Domain::class;
             $subject = $class::forUser($request->user())->findOrFail($id);
         }
-        $entries = ActivityLog::forUser($request->user())
+        $entries = ActivityLog::forUser($request->user())->when($filters['entry'] ?? null, fn ($query, $id) => $query->whereKey($id))
             ->when($subject && $type === 'domain', fn ($query) => $query->where('domain_id', $id))
             ->when($subject && $type === 'project', fn ($query) => $query->where('subject_type', 'project')->where('subject_id', $id))
             ->orderByDesc('occurred_at')->orderByDesc('id')->paginate(20)->withQueryString();

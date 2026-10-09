@@ -26,7 +26,7 @@ class ParserPreviewController extends Controller
         try {
             $result = app(OpenAICaptureClient::class)->generate($data['text'], app(CaptureContext::class)->forCapture($capture));
             $items = app(CaptureTranscript::class)->items($data['text'], $result['parsed']['actions']);
-            $result['items'] = array_map(fn ($action) => app(CaptureActions::class)->preview($request->user(), $data['text'], $action), $items);
+            $result['items'] = array_map(fn ($action) => app(CaptureActions::class)->preview($request->user(), $data['text'], $action, $capture), $items);
             unset($result['parsed']);
 
             return response()->json($result);

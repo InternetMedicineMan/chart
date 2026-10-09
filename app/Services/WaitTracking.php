@@ -8,6 +8,7 @@ use App\Models\Person;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -16,9 +17,9 @@ use Illuminate\Validation\ValidationException;
 
 class WaitTracking
 {
-    public function save(User $user, string $type, int $id, array $data): void
+    public function save(User $user, string $type, int $id, array $data, ?CarbonInterface $occurredAt = null): void
     {
-        DB::transaction(function () use ($user, $type, $id, $data) {
+        DB::transaction(function () use ($user, $type, $id, $data, $occurredAt) {
             User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $class = $type === 'task' ? Task::class : Project::class;
             $record = $class::forUser($user)->lockForUpdate()->findOrFail($id);
@@ -39,7 +40,7 @@ class WaitTracking
             $samePerson = (int) $record->$personField === $person->id;
             $attributes = [
                 $personField => $person->id,
-                $sinceField => $samePerson && $record->$sinceField ? $record->$sinceField : now(),
+                $sinceField => $samePerson && $record->$sinceField ? $record->$sinceField : ($occurredAt ?? now()),
                 'wait_expected_by' => $data['expected_by'] ?? null,
             ];
             if ($record instanceof Project) {

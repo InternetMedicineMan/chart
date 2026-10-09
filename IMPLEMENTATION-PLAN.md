@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: manual activity logging, monthly time totals and reversible activity touches are implemented, following shared computed states, waits and daily planning. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
+Latest checkpoint: capture now logs project/domain activity and sets existing task/project waits, with exact reference matching, review, stale-work protection and seven-day undo. Manual activity, monthly time totals, shared computed states, waits and daily planning are implemented. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -277,6 +277,22 @@ Verification: 110 relevant PHP tests passed (1,390 assertions), including 11 act
 
 Deployment: local MySQL migration completed. Deploy code and assets through Forge, run `php artisan migrate --force` before restarting workers with `php artisan queue:restart`, and refresh existing config/route caches through the normal deployment flow. The migration creates `activity_logs` and `work_touches` and preserves existing touch timestamps. No push or production deployment was performed by the agent.
 
+## Capture activity and hand-offs — October 9, 2026
+
+The existing phone, Watch and web capture paths now support `log_activity` and `set_waiting`; no Shortcut changes are needed. The parser uses the same configured GPT-6 Luna model and adds bounded active-task context. This does not implement completion, clearing waits, daily-plan voice commands, new-person creation, recurrence or the remaining Phase 1 actions.
+
+- Activity records notes and optional stated minutes against an existing active project or available domain. Recording time is the default; an explicit date/time is interpreted in the capture’s original timezone. Future times and invalid DST times go to review. Project/domain touches and monthly totals use the actual occurrence time, including delayed outbox uploads.
+- Waiting updates an existing open task or active project for an existing person, with an optional expected response date. Unique exact names (case/whitespace normalized) and confidence of at least 0.8 are required for automatic execution. Unknown, fuzzy, duplicate or missing names go to review. No new work or people are invented to satisfy a hand-off.
+- Work changed at or after the recording time requires review before setting a wait. The review form shows current waiting people and submits the selected work’s wait revision; concurrent hand-off changes require a reload. The wait starts at recording time, while updates for the same person preserve its existing start.
+- Capture review offers Activity and Waiting on, with explicit owned subject/person selectors. Activity links directly to its history entry. The Settings parser preview applies the same reference, confidence, timestamp and stale-work checks without writes.
+- One transaction and owner lock cover execution, activity touches, audit and notifications. Existing per-item idempotence and mixed-dump recovery remain in place. `action_logs.before_snapshot` records the previous waiting fields; undo restores them without deleting the work. Activity undo removes that entry and recalculates its touches. Both enforce the seven-day window and refuse to overwrite later changes. Original capture text is retained.
+
+Validation: 184 relevant PHP tests passed across the focused runs (2,004 assertions), including 29 capture-work cases for idempotence, mixed execution, ambiguity, ownership/availability, stale offline changes, review revisions, activity dates/timezones/DST, notifications, preview and undo. Client/SSR builds, Pint, route-cache compile/clear and diff checks passed. Isolated desktop and 390px browser checks verified reviewed hand-offs and activity, destinations, undo, retained original text/work, and monthly totals without overflow or page errors; the preview server was stopped. Existing DaisyUI `@property` optimizer warnings remain non-blocking.
+
+Live synthetic evaluation: the full 36-case Luna run passed 35/36. Its remaining case said “by Thursday” on a Thursday; the model conservatively requested a date clarification instead of assuming today. That fixture now records on Wednesday, making the intended Thursday deadline unambiguous; its targeted rerun passed. Thus all current cases have passing evidence across these runs, not a second full-suite run or an accuracy guarantee. The application prompt and model were unchanged between runs. Reports: `storage/app/private/parser-evals/20261009-141648-8d82a979-0938-4034-b72e-339f44fff585.json` and `20261009-141722-4bf915bc-ad32-4320-9fb1-1646bc6ccba6.json`. No live evaluation wrote work records or sent owner capture content.
+
+Deployment: the additive snapshot migration is applied to local MySQL. The local capture worker had stopped and was started with current code; the existing scheduler remains running. Deploy source and built assets through Forge, then run `php artisan migrate --force`, refresh the normal config/route caches, and run `php artisan queue:restart` so supervised workers load the new action registry. No environment or scheduler changes are required. No push or production deployment was performed.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -369,7 +385,7 @@ Acceptance: a task can be created, assigned to a valid project/domain, completed
 - [x] Build parser context, action schema, reference resolver and executor from one action registry. Initially advertise tasks, ideas, projects and explicit triage; retain unsupported material for review. Luna passed the live fixture evaluation; real use remains the acceptance gate.
 - [x] Deliver in-app typed capture, online watch/phone shortcuts, brain-dump splitting, triage and capture history. Owner reports iPhone and Watch capture working.
 - [ ] Deferred by owner: `capture:import` for pre-launch notes; there are no older notes to import. Revisit when a real import is needed.
-- [x] Build safe per-item retry and seven-day undo for the implemented creation actions. One failed item does not block successful siblings or execute them twice. Later mutation actions need their own reversible effects.
+- [x] Build safe per-item retry and seven-day undo for the implemented creation actions. One failed item does not block successful siblings or execute them twice. Activity and waiting actions now have their own reversible effects; later mutation actions still need theirs.
 - [x] Implement the open-app IndexedDB outbox: pending count, stable request keys and replay on open/visibility/online. Retain unsent text through auth expiry and require the same owner to resume submission.
 - [ ] Verify real-device Shortcut offline storage/replay and cold offline app launch separately.
 
@@ -378,10 +394,11 @@ Acceptance: one dump containing five unrelated items produces five individually 
 ### 4. Complete the work model and computed state
 
 - [x] Add manual task/project waits and expected response dates, person selection, hand-off timestamps and stale-edit protection. Basic priorities and due dates/times were already implemented.
-- [ ] Add milestones, subtasks, recurring tasks and extra touch targets; extend voice capture with reversible waiting actions.
+- [ ] Add milestones, subtasks, recurring tasks and extra touch targets.
+- [x] Extend voice/text capture with reversible activity logging and waiting updates, exact existing-reference checks, manual review and stale-work protection.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
 - [x] Add manual activity entries with minutes, project/domain touch history and corrections, and monthly time totals.
-- [ ] Add extra task touch targets and later People/content propagation; extend parser actions to activity, waits and daily planning with reversible mutations.
+- [ ] Add extra task touch targets and later People/content propagation; extend parser actions to daily planning with reversible mutations.
 - [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
 - [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
 - [ ] Implement recurrence and completion/undo together so retries and undo cannot create extra occurrences or false cadence resets.

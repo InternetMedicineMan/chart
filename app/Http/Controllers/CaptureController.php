@@ -9,6 +9,7 @@ use App\Models\CaptureAttempt;
 use App\Models\CaptureItem;
 use App\Services\CaptureActions;
 use App\Services\CaptureService;
+use App\Services\DailyPlanning;
 use App\Services\WorkOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -29,8 +30,12 @@ class CaptureController extends Controller
     {
         $record = Capture::forUser($request->user())->with(['items' => fn ($q) => $q->forUser($request->user())->orderBy('sequence')])->findOrFail($capture);
 
+        $workOptions = $options->forUser($request->user());
+        $workOptions['captureTimezone'] = $record->timezone;
+        $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by']);
+
         return Inertia::render('Work/Capture', [
-            'capture' => $record, 'options' => $options->forUser($request->user()),
+            'capture' => $record, 'options' => $workOptions,
             'attempts' => CaptureAttempt::forUser($request->user())->where('capture_id', $record->id)->get(['id', 'model', 'status', 'input_tokens', 'output_tokens', 'created_at']),
             'aiEnabled' => app(CaptureService::class)->enabled(),
         ]);
