@@ -184,7 +184,7 @@ it('keeps owner data isolated and uses a fixed query count as projects grow', fu
     }
     DB::flushQueryLog();
     ($this->snapshot)();
-    expect(count(DB::getQueryLog()))->toBe($count)->and($count)->toBeLessThanOrEqual(7);
+    expect(count(DB::getQueryLog()))->toBe($count)->and($count)->toBeLessThanOrEqual(8);
     DB::disableQueryLog();
     Http::assertNothingSent();
 });

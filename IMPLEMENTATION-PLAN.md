@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: shared computed project/domain states now drive Briefing, Bench and project pages, following manual waits and daily planning. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
+Latest checkpoint: manual activity logging, monthly time totals and reversible activity touches are implemented, following shared computed states, waits and daily planning. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -265,6 +265,18 @@ Verification: 74 relevant PHP tests passed (1,059 assertions), including 18 stat
 
 Deployment: deploy code and built assets through the existing Forge flow. No migration, new dependencies, environment settings or scheduler entries are needed for this checkpoint. No push/deployment was performed by the agent. Activity logging and touch propagation are next; the isolated preview server was stopped after checks.
 
+## Activity logging and touch history — October 9, 2026
+
+- Log activity against an owned project or domain from Bench, a project page, or Activity history. Entries contain a note, optional 1–1,440 minutes and a local date/time in the configured timezone. History is paginated globally, by project, and by domain; domain history includes project activity recorded in that domain. Project pages show their recent activity below tasks.
+- Activity can be edited or removed with stale-revision protection. A stable owner-scoped submission UUID makes identical retries idempotent and rejects changed reuse. Blank/oversized notes, invalid durations, future times, invalid spring-forward local times and stale timezone forms are rejected. The current time is offered by default; backdating records the actual selected time rather than touching the subject as if it happened now.
+- Project activity touches the project and its domain; direct domain activity touches that domain. `work_touches` records the source of each touch, and `last_touched_at` is refreshed from the maximum remaining timestamp. Editing/removing activity cannot erase a later task completion or another entry. Existing touch dates are migrated as baselines without modifying the work record or capture snapshots. Task completion now writes through the same touch history; duplicate completion is a no-op, and reopening retains the historical completion touch.
+- Monthly minutes aggregate using local-month boundaries converted to UTC. Project/domain state strips and Bench summaries show logged hours/minutes. A project move preserves the original domain on past activity; new entries use its current domain. Corrections cannot silently move an existing entry to a different subject. Active activity history prevents deleting its project/domain; closing the project remains available.
+- All writes and touch updates share a transaction and owner lock. Preview/test records are isolated. No new paid model requests, dependencies or scheduler entries. Manual activity still requires a connection; voice `log_activity`, mutation undo through capture, extra task touch targets, People/content touches and full nightly observations remain pending. The state resolver now uses eight aggregate queries, including monthly totals.
+
+Verification: 110 relevant PHP tests passed (1,390 assertions), including 11 activity cases for project/domain propagation, monthly totals, retries, stale edits, corrections/deletions, backdating, pre-upgrade baselines, project moves, task completion/reopening, owner/2FA boundaries, local dates/DST and pagination. Client/SSR builds, Pint, route-cache compile/clear and diff checks passed. Isolated desktop and 390px phone browser checks verified project/domain logging, live cadence/time updates, editing, history, cancel/confirm removal, and recency restoration without overflow or page errors. The preview server was stopped after checking.
+
+Deployment: local MySQL migration completed. Deploy code and assets through Forge, run `php artisan migrate --force` before restarting workers with `php artisan queue:restart`, and refresh existing config/route caches through the normal deployment flow. The migration creates `activity_logs` and `work_touches` and preserves existing touch timestamps. No push or production deployment was performed by the agent.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -368,7 +380,8 @@ Acceptance: one dump containing five unrelated items produces five individually 
 - [x] Add manual task/project waits and expected response dates, person selection, hand-off timestamps and stale-edit protection. Basic priorities and due dates/times were already implemented.
 - [ ] Add milestones, subtasks, recurring tasks and extra touch targets; extend voice capture with reversible waiting actions.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
-- [ ] Add activity entries with minutes and full touch propagation; extend parser actions to daily planning with reversible mutations.
+- [x] Add manual activity entries with minutes, project/domain touch history and corrections, and monthly time totals.
+- [ ] Add extra task touch targets and later People/content propagation; extend parser actions to activity, waits and daily planning with reversible mutations.
 - [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
 - [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
 - [ ] Implement recurrence and completion/undo together so retries and undo cannot create extra occurrences or false cadence resets.
@@ -379,7 +392,8 @@ Acceptance: completing a task touches its intended subjects; overdue waits outra
 
 - [ ] Replace the SaaS dashboard with capped Briefing blocks, including honest empty states.
 - [x] Add Bench state filters, domain roll-ups and project state strips alongside existing tasks.
-- [ ] Add activity and weighted milestone progress to Bench/project views.
+- [x] Add activity history and monthly time totals to Bench/project views.
+- [ ] Add weighted milestone progress.
 - [ ] Surface triage older than 48 hours, pending captures and Inbox/Ideas counts.
 - [ ] Add the initial nightly observations with scores, day/week deduplication, snooze/dismissal, auto-resolution and expiry.
 - [ ] Avoid N+1 queries with aggregate counts and eager loading. Paginate history from the start.

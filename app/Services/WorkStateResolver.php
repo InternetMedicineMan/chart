@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\ProjectLifecycle;
 use App\Enums\ProjectType;
 use App\Enums\WorkHolder;
+use App\Models\ActivityLog;
 use App\Models\DailyPlan;
 use App\Models\Domain;
 use App\Models\Person;
@@ -23,6 +24,9 @@ class WorkStateResolver
         $dates = app(LocalDate::class);
         $timezone = $dates->timezone($user);
         $today = $dates->date(now(), $timezone);
+        $monthStart = CarbonImmutable::parse($today, $timezone)->startOfMonth();
+        $minutes = ActivityLog::forUser($user)->where('occurred_at', '>=', $monthStart->utc())->where('occurred_at', '<', $monthStart->addMonth()->utc())
+            ->select(['subject_type', 'subject_id', 'domain_id'])->selectRaw('SUM(minutes) AS total_minutes')->groupBy('subject_type', 'subject_id', 'domain_id')->get();
         $domains = Domain::forUser($user)->orderBy('sort_order')->get()->keyBy('id');
         $projects = Project::forUser($user)->get()->keyBy('id');
         $topIds = DailyPlan::forUser($user)->whereDate('plan_date', $today)->first()?->top_task_ids ?: [0];
@@ -58,7 +62,7 @@ class WorkStateResolver
                 $waitsByDomain[$project->domain_id][] = $wait;
             }
             $counts = $this->counts($buckets->where('project_id', $project->id));
-            $projectStates[$project->id] = $this->resolve($project, $counts, $waits, $timezone, $excluded);
+            $projectStates[$project->id] = $this->resolve($project, $counts, $waits, $timezone, $excluded) + ['minutes_month' => (int) $minutes->where('subject_type', 'project')->where('subject_id', $project->id)->sum('total_minutes')];
         }
         $domainStates = [];
         foreach ($domains as $domain) {
@@ -73,7 +77,7 @@ class WorkStateResolver
                     }
                 }
             }
-            $domainStates[$domain->id] = $state;
+            $domainStates[$domain->id] = $state + ['minutes_month' => (int) $minutes->where('domain_id', $domain->id)->sum('total_minutes')];
         }
 
         return ['projects' => collect($projectStates), 'domains' => collect($domainStates), 'projectRecords' => $projects, 'domainRecords' => $domains];

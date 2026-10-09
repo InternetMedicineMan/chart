@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\CaptureTokenController;
 use App\Http\Controllers\DailyPlanController;
@@ -28,6 +29,10 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::get('/daily-plan/tasks', [DailyPlanController::class, 'tasks'])->name('daily-plan.tasks');
         Route::put('/daily-plan', [DailyPlanController::class, 'update'])->name('daily-plan.update');
         Route::get('/bench', [WorkController::class, 'bench'])->name('bench');
+        Route::get('/activity', [ActivityController::class, 'index'])->name('activity.index');
+        Route::post('/activity', [ActivityController::class, 'store'])->name('activity.store');
+        Route::put('/activity/{activity}', [ActivityController::class, 'update'])->name('activity.update');
+        Route::delete('/activity/{activity}', [ActivityController::class, 'destroy'])->name('activity.destroy');
         Route::get('/intake', [WorkController::class, 'intake'])->name('intake');
         Route::get('/notifications', [NotificationFeedController::class, 'index'])->name('notifications.index');
         Route::post('/notifications/read-all', [NotificationFeedController::class, 'readAll'])->name('notifications.read-all');

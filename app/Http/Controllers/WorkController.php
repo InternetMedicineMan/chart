@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\AppSetting;
 use App\Models\Capture;
 use App\Models\CaptureToken;
@@ -123,6 +124,7 @@ class WorkController extends Controller
         $waits->decorate($tasks->getCollection(), $request->user());
 
         return Inertia::render('Work/Project', [
+            'activity' => ActivityLog::forUser($request->user())->where('subject_type', 'project')->where('subject_id', $record->id)->orderByDesc('occurred_at')->orderByDesc('id')->paginate(10, ['*'], 'activity_page')->withQueryString(),
             'project' => $record, 'options' => $options->forUser($request->user()), 'filters' => $filters,
             'tasks' => $tasks,
         ]);

@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Enums\ProjectLifecycle;
 use App\Http\Requests\SaveProjectRequest;
+use App\Models\ActivityLog;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\WaitTracking;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,6 +30,7 @@ class ProjectController extends Controller
     public function update(SaveProjectRequest $request, int $project): RedirectResponse
     {
         DB::transaction(function () use ($request, $project) {
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $record = Project::forUser($request->user())->lockForUpdate()->findOrFail($project);
             $attributes = $request->validated() + ['needs_review' => false];
             $attributes['completed_at'] = $attributes['lifecycle'] === ProjectLifecycle::Done->value ? ($record->completed_at ?? now()) : null;
@@ -45,9 +48,13 @@ class ProjectController extends Controller
     public function destroy(Request $request, int $project): RedirectResponse
     {
         DB::transaction(function () use ($request, $project) {
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $record = Project::withTrashed()->forUser($request->user())->lockForUpdate()->findOrFail($project);
             if ($record->trashed()) {
                 return;
+            }
+            if (ActivityLog::forUser($request->user())->where('subject_type', 'project')->where('subject_id', $record->id)->exists()) {
+                throw ValidationException::withMessages(['project' => 'This project has activity history. Keep it as Done or Dropped, or remove its activity entries before deleting it.']);
             }
             if ($record->tasks()->withTrashed()->exists()) {
                 throw ValidationException::withMessages(['project' => 'Move this project’s tasks to another project or choose No project first. Tasks in Recently deleted must be restored and moved too.']);
@@ -61,6 +68,7 @@ class ProjectController extends Controller
     public function restore(Request $request, int $project): RedirectResponse
     {
         DB::transaction(function () use ($request, $project) {
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $record = Project::withTrashed()->forUser($request->user())->lockForUpdate()->findOrFail($project);
             if ($record->trashed()) {
                 $record->restore();

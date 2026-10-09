@@ -18,8 +18,8 @@ class Domain extends Model
     protected static function booted(): void
     {
         static::deleting(function (Domain $domain) {
-            if ($domain->is_inbox || $domain->tasks()->withTrashed()->exists() || $domain->projects()->withTrashed()->exists()) {
-                throw ValidationException::withMessages(['domain' => 'The Inbox and domains containing work must be kept. Move the work first.']);
+            if (ActivityLog::forUser($domain->user_id)->where('domain_id', $domain->id)->exists() || $domain->is_inbox || $domain->tasks()->withTrashed()->exists() || $domain->projects()->withTrashed()->exists()) {
+                throw ValidationException::withMessages(['domain' => 'The Inbox and domains containing work or activity must be kept. Move the work first.']);
             }
         });
     }

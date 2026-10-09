@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveTaskRequest;
-use App\Models\Domain;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
+use App\Services\ActivityTracking;
 use App\Services\WaitTracking;
 use App\Services\WorkSetup;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,7 @@ class TaskController extends Controller
     public function update(SaveTaskRequest $request, int $task, WorkSetup $setup): RedirectResponse
     {
         DB::transaction(function () use ($request, $task, $setup) {
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             // Lock the project before the task, matching project moves that update their children.
             $attributes = $this->attributes($request, $setup) + ['needs_review' => false];
             Task::forUser($request->user())->lockForUpdate()->findOrFail($task)->update($attributes);
@@ -49,6 +51,7 @@ class TaskController extends Controller
     {
         $data = $request->validate(['completed' => ['required', 'boolean']]);
         DB::transaction(function () use ($request, $task, $data) {
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $record = Task::forUser($request->user())->lockForUpdate()->findOrFail($task);
             if ((bool) $record->completed_at === (bool) $data['completed']) {
                 return;
@@ -56,8 +59,7 @@ class TaskController extends Controller
             $record->update(['completed_at' => $data['completed'] ? now() : null]);
             if ($data['completed']) {
                 app(WaitTracking::class)->clear($record);
-                Domain::forUser($request->user())->whereKey($record->domain_id)->update(['last_touched_at' => now()]);
-                Project::forUser($request->user())->whereKey($record->project_id)->update(['last_touched_at' => now()]);
+                app(ActivityTracking::class)->completed($request->user(), $record);
             }
         });
 
