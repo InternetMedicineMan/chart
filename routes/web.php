@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\CaptureTokenController;
+use App\Http\Controllers\DailyPlanController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
 use App\Http\Controllers\NotificationFeedController;
@@ -23,6 +24,8 @@ Route::get('/up', fn () => response()->json(['status' => 'ok']))->name('health')
 Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAuthentication::class])
     ->group(function () {
         Route::get('/dashboard', [WorkController::class, 'dashboard'])->name('dashboard');
+        Route::get('/daily-plan/tasks', [DailyPlanController::class, 'tasks'])->name('daily-plan.tasks');
+        Route::put('/daily-plan', [DailyPlanController::class, 'update'])->name('daily-plan.update');
         Route::get('/bench', [WorkController::class, 'bench'])->name('bench');
         Route::get('/intake', [WorkController::class, 'intake'])->name('intake');
         Route::get('/notifications', [NotificationFeedController::class, 'index'])->name('notifications.index');

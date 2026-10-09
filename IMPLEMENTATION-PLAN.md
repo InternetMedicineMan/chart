@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: iPhone and Apple Watch capture are working according to the owner's device tests. The in-app notifications feed is now implemented locally (details below); push alerts and Watch offline recovery remain open.
+Latest checkpoint: daily Top 3 and tomorrow’s focus are implemented, verified and migrated locally. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -223,7 +223,21 @@ Local setup: the new `notifications_feed` table is migrated on local MySQL and t
 
 Production rollout: deploy the code and built assets through the existing Forge process, run `php artisan migrate --force`, rebuild cached configuration as usual and run `php artisan queue:restart` after migrations. This checkpoint has not been pushed or deployed by the agent. After deploying, make one new capture and check the bell/Notifications page; older captures do not populate this new feed automatically.
 
-Next unfinished capture item: `capture:import` for pre-launch notes. After that, proceed with waits, daily Top 3, activity/touches and the shared computed work state; offline and push acceptance remain explicitly pending rather than treating the capture gate as fully complete.
+At this checkpoint, `capture:import` was next. The owner subsequently confirmed there are no older notes to import; the following daily-planning checkpoint defers that command and advances the work model. Offline and push acceptance remain explicitly pending rather than treating the capture gate as fully complete.
+
+## Daily Top 3 and tomorrow’s focus — October 8, 2026
+
+The owner confirmed there are no pre-launch Apple Notes captures to import. Defer `capture:import` until there is an actual backlog to recover; no import code or command was retained. Continue Phase 1 with daily planning.
+
+- The Chart page now leads with today’s Top 3, completion progress and yesterday’s focus line. Choose zero to three existing tasks in a searchable, paginated picker, reorder them, complete/reopen through the existing task controls, and save an optional 280-character focus line for tomorrow. Choosing tasks does not invent deadlines or create duplicate tasks.
+- Daily plans belong to the owner and a local calendar date. Each new day starts with an empty Top 3; the previous day’s focus appears for that day only. The original plan remains stored. All date boundaries use the configured timezone, including DST transitions.
+- Completed choices remain visible for that day. Deleted work, parked/archived domains and non-active projects cannot become new choices; previously selected unavailable tasks are identified and can be replaced. Completed tasks can stay in an existing plan, but cannot be newly added as open work.
+- Server-side maximum/distinctness validation, ownership/2FA boundaries, one plan per owner/date and revision checks prevent extra choices and stale-tab overwrites. A screen left open across local midnight or a timezone change must reload before saving to a different date.
+- This checkpoint provides manual planning. Voice `set_top3` / `set_tomorrow_focus` still go to review until their parser reference matching and reversible mutation actions ship. Computed work states, waits and activity/touch expansion remain next.
+
+Verification: 41 relevant PHP tests passed (723 assertions), including 16 daily-planning cases covering ordering, completion, invalid choices, owner boundaries, pagination/search, focus carry-forward, Chicago evening dates, both DST changes and stale revisions. Client/SSR builds, Pint, route-cache compilation/clear and diff checks passed. An isolated browser account verified desktop and 390px phone selection, the three-choice limit, reorder, save focus, complete/reopen, searching beyond the first candidate page, replacing choices and canceling edits. No browser errors or horizontal overflow; synthetic preview work stayed out of the owner’s database.
+
+Deployment: apply the `daily_plans` migration with the usual `php artisan migrate --force` after deploying code/assets. No new environment settings, scheduler entries or dependencies. The owner restarted local MySQL after the initial connection refusal; the migration then completed successfully. The isolated preview server was stopped. Nothing was pushed or deployed by the agent.
 
 ## Initial audit
 
@@ -316,7 +330,7 @@ Acceptance: a task can be created, assigned to a valid project/domain, completed
 - [ ] Configure Redis/Horizon if replacing the current database queue; production currently uses the owner-confirmed Forge worker/scheduler setup.
 - [x] Build parser context, action schema, reference resolver and executor from one action registry. Initially advertise tasks, ideas, projects and explicit triage; retain unsupported material for review. Luna passed the live fixture evaluation; real use remains the acceptance gate.
 - [x] Deliver in-app typed capture, online watch/phone shortcuts, brain-dump splitting, triage and capture history. Owner reports iPhone and Watch capture working.
-- [ ] Add `capture:import` for pre-launch notes.
+- [ ] Deferred by owner: `capture:import` for pre-launch notes; there are no older notes to import. Revisit when a real import is needed.
 - [x] Build safe per-item retry and seven-day undo for the implemented creation actions. One failed item does not block successful siblings or execute them twice. Later mutation actions need their own reversible effects.
 - [x] Implement the open-app IndexedDB outbox: pending count, stable request keys and replay on open/visibility/online. Retain unsent text through auth expiry and require the same owner to resume submission.
 - [ ] Verify real-device Shortcut offline storage/replay and cold offline app launch separately.
@@ -326,7 +340,8 @@ Acceptance: one dump containing five unrelated items produces five individually 
 ### 4. Complete the work model and computed state
 
 - [ ] Add milestones, subtasks, priorities, due dates/times, waits and expected response dates, recurring tasks and extra touch targets.
-- [ ] Add activity entries with minutes, touch propagation, Top 3 and tomorrow's-focus line.
+- [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
+- [ ] Add activity entries with minutes and full touch propagation; extend parser actions to daily planning with reversible mutations.
 - [ ] Build the shared `WorkStateResolver`, cache invalidation and parent roll-ups; use it in both Briefing and Bench.
 - [ ] Implement recurrence and completion/undo together so retries and undo cannot create extra occurrences or false cadence resets.
 

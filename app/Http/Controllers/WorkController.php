@@ -9,6 +9,7 @@ use App\Models\Note;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\CaptureService;
+use App\Services\DailyPlanning;
 use App\Services\LocalDate;
 use App\Services\WorkOptions;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,15 +21,14 @@ use Inertia\Response;
 
 class WorkController extends Controller
 {
-    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates): Response
+    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates, DailyPlanning $planning): Response
     {
         $user = $request->user();
-        $due = Task::forUser($user)->whereNull('completed_at')->whereDate('due_date', '<=', $dates->today($user))
-            ->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('parked', false)->whereNull('archived_at'))
-            ->where(fn (Builder $query) => $query->whereNull('project_id')->orWhereHas('project', fn (Builder $query) => $query->forUser($user)->where('lifecycle', 'active')));
+        $due = $planning->activeTasks($user)->whereNull('completed_at')->whereDate('due_date', '<=', $dates->today($user));
 
         return Inertia::render('Dashboard', [
             'options' => $options->forUser($user),
+            'dailyPlan' => $planning->today($user),
             'dueCount' => (clone $due)->count(),
             'dueTasks' => $due->with(['project', 'domain'])->orderBy('due_date')->orderBy('priority')->orderBy('id')->limit(7)->get(),
             'inboxCount' => Task::forUser($user)->whereNull('completed_at')->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('is_inbox', true))->count(),
