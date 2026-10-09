@@ -1,0 +1,9 @@
+<script setup>
+import { Link } from '@inertiajs/vue3';
+const props = defineProps({ calendar: Object, timezone: String });
+const hours = minutes => `${(minutes / 60).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${minutes === 60 ? 'hour' : 'hours'}`;
+const label = event => event.all_day ? `${event.start_date} · all day` : new Intl.DateTimeFormat('en-US', {weekday:'short',hour:'numeric',minute:'2-digit',timeZone:props.timezone}).format(new Date(event.starts_at));
+</script>
+<template>
+    <section v-if="calendar" class="mb-8"><div class="mb-3 flex items-center justify-between gap-3"><h3 class="font-semibold">Now / Next</h3><Link :href="route('calendar.index')" class="min-h-11 py-3 text-sm text-primary">Calendar →</Link></div><p v-if="calendar.stale" class="mb-3 text-sm text-warning">Calendar data may be out of date. Check sync in Calendar settings.</p><div class="grid gap-3 lg:grid-cols-3"><Link v-for="event in calendar.events" :key="event.id" :href="route('calendar.index')" class="rounded-xl border border-base-300 bg-base-100 p-4"><p class="break-words text-sm font-medium">{{ event.title }}</p><p class="mt-2 text-xs text-base-content/60">{{ label(event) }} · {{ event.calendar.name }}</p></Link></div><p v-if="!calendar.events.length" class="text-sm text-base-content/55">{{ calendar.selected_count ? 'No synced events ahead in the next seven days.' : 'Choose calendars in Settings to see upcoming events.' }}</p><p v-if="calendar.tomorrow" class="mt-3 text-sm text-base-content/60">Tomorrow: {{ hours(calendar.tomorrow.minutes) }} booked{{ calendar.tomorrow.all_day_count ? ` · ${calendar.tomorrow.all_day_count} all-day events` : '' }}. {{ hours(calendar.tomorrow.focus_minutes) }} unbooked ({{ calendar.tomorrow.window }}). Overlaps count once; busy all-day events block the window.</p></section>
+</template>

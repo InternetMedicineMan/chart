@@ -34,6 +34,14 @@ return [
             'driver' => 'sync',
         ],
 
+        'calendar_database' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'calendar',
+            'retry_after' => 360,
+            'after_commit' => true,
+        ],
+
         'database' => [
             'driver' => 'database',
             'table' => 'jobs',

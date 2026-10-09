@@ -13,12 +13,13 @@ const current = computed(() => {
     if (path.startsWith('/user/') || path.startsWith('/settings/')) return 'profile.show';
     if (path.startsWith('/bench') || path.startsWith('/projects/')) return 'bench';
     if (path === '/intake' || path.startsWith('/captures/')) return 'intake';
+    if (path === '/calendar') return 'calendar.index';
     if (path === '/ideas') return 'ideas';
     if (path === '/notifications') return 'notifications.index';
     if (path === '/more') return 'more';
     return 'dashboard';
 });
-const mobileCurrent = computed(() => ['profile.show', 'ideas', 'notifications.index'].includes(current.value) ? 'more' : current.value);
+const mobileCurrent = computed(() => ['profile.show', 'ideas', 'notifications.index', 'calendar.index'].includes(current.value) ? 'more' : current.value);
 const title = computed(() => [...navigation, ...mobileNavigation].find(item => item.route === current.value)?.label || 'Chart');
 const logout = () => router.post(route('logout'));
 </script>

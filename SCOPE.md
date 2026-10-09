@@ -81,7 +81,7 @@ These rules settle arguments during the build. When a feature idea conflicts wit
 | Auth | Fortify / Jetstream with 2FA (TOTP) | One user. Registration disabled after seeding. |
 | Files | Flysystem → S3-compatible (R2, S3, Spaces) | Photos, receipts, journal scans. One private bucket; served through signed URLs only. |
 | AI | Anthropic API via Laravel HTTP client or PHP SDK | Larger model for parsing and vision, small model for cheap jobs. Prompt caching on. |
-| Google | Socialite + Google API client | Calendar (two-way), Gmail (Phase 2) |
+| Google | Authenticated OAuth integration + Laravel HTTP client | Calendar (two-way), Gmail (Phase 2) |
 | Push | Web Push channel and/or Pushover | Reminders and approvals |
 | Book data | Open Library API | Covers and metadata |
 | Hosting | VPS with Forge/Ploi (or existing host) | One site at `chart.internetmedicineman.com` (+ `ops.` redirect), wildcard cert |
@@ -605,7 +605,7 @@ Each observation carries a **score**, and the Briefing shows the highest-scoring
 | Person date (birthday, anniversary, fact) | 7 / 14 / 14 days out | 40–50 | +40 within 3 days |
 | Ideas aging | **≥ 3 ideas unreviewed for 30+ days** — one roll-up item per week | 25 | — |
 | Inbox backlog | ≥ 3 captures still needing review for over 7 local calendar days (owner confirmed October 9, 2026) | 20 | — |
-| Tomorrow's load | meeting hours vs. free focus time (factual line only) | 20 | — |
+| Tomorrow's load | booked vs. unbooked time within **8 a.m.–5 p.m. in the Chart timezone** (owner confirmed October 9, 2026); overlaps counted once, busy all-day events block the window, stale data suppresses the estimate | 20 | — |
 
 - **Urgency mapping:** score ≥ 80 = high, ≥ 30 = normal, below = low. *(Ref. note 2)*
 - **Dedup key = `rule:subject:bucket`**, where the bucket is the **week** for slow-moving nags (quiet, stalled, waiting, ideas) and the **day** for due tasks. A weekly bucket means a nag can return next week without repeating daily. *(Ref. note 4)*
@@ -972,13 +972,16 @@ First steps:
 | D27 | Use Appendix A starter domains, with Ministry & Church under Personal | Owner confirmed October 8, 2026; domains remain editable in Settings | After real use |
 | D28 | OpenAI first for capture, with standard API billing, replaceable parser and usage tracking | Owner approved October 8, 2026 after distinguishing ChatGPT/Claude subscriptions from API billing. Build and test durable capture before connecting a paid key | After real capture evaluation; provider choice remains revisable |
 
+| D29 | Google Calendar access is selected per calendar: Off, Read-only or Two-way | Owner chose per-calendar two-way support October 9, 2026; Google permissions remain an upper bound | After live Calendar acceptance |
+| D30 | Tomorrow’s load uses 8 a.m.–5 p.m. in the configured Chart timezone | Owner confirmed October 9, 2026; unbooked time is factual availability, not a promise of uninterrupted focus | After real use |
+
 ---
 
 ## 18. Open Questions (settle at kickoff)
 
 1. Hosting: new VPS or existing server? Which management tool?
 2. Inbound email provider for forward-to-capture?
-3. Which Google calendars sync two-way vs. read-only?
+3. Resolved October 9, 2026: enable two-way sync individually per calendar; calendars start Off, with Read-only also available. Google Cloud OAuth setup is still an owner setup step.
 4. Should ministry work be its own sphere or a domain under personal?
 
 ---

@@ -141,6 +141,14 @@ class BriefingObservations
             $add('inbox_backlog', 'captures', $user->id, "{$backlog} captures need a decision", 'Waiting for review for more than seven days', 20, route('intake', ['review' => 1], false), false, $backlog);
         }
 
+        $load = app(CalendarBriefing::class)->tomorrow($user);
+        if ($load) {
+            $hours = round($load['minutes'] / 60, 1).($load['minutes'] === 60 ? ' hour' : ' hours');
+            $free = round($load['focus_minutes'] / 60, 1).($load['focus_minutes'] === 60 ? ' hour' : ' hours');
+            $allDay = $load['all_day_count'] ? " · {$load['all_day_count']} busy all-day events" : '';
+            $add('tomorrow_load', 'calendar', $user->id, "Tomorrow: {$hours} booked", "{$free} unbooked, 8 a.m.–5 p.m.{$allDay}. Overlapping events count once; busy all-day events block the window.", 20, route('calendar.index', ['date' => $load['date']], false), true);
+        }
+
         return $items;
     }
 

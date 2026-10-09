@@ -6,15 +6,17 @@ import TaskRows from '@/Components/Work/TaskRows.vue';
 import QuickAdd from '@/Components/Work/QuickAdd.vue';
 import DailyFocus from '@/Components/Work/DailyFocus.vue';
 import ObservationRows from '@/Components/Work/ObservationRows.vue';
+import CalendarNowNext from '@/Components/Work/CalendarNowNext.vue';
 import WaitingOn from '@/Components/Work/WaitingOn.vue';
 defineOptions({ layout: AppLayout });
-const props = defineProps({ observations: Object, pendingCaptureCount: Number, reviewCaptureCount: Number, newIdeaCount: Number, options: Object, dailyPlan: Object, waiting: Object, quiet: Object, dueTasks: Array, dueCount: Number, inboxCount: Number, ideaCount: Number, projectCount: Number, oldCaptureCount: Number });
+const props = defineProps({ calendar: Object, observations: Object, pendingCaptureCount: Number, reviewCaptureCount: Number, newIdeaCount: Number, options: Object, dailyPlan: Object, waiting: Object, quiet: Object, dueTasks: Array, dueCount: Number, inboxCount: Number, ideaCount: Number, projectCount: Number, oldCaptureCount: Number });
 const date = computed(() => new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${props.options.today}T12:00:00Z`)));
 </script>
 
 <template>
     <section class="mb-8"><p class="work-eyebrow">{{ date }}</p><h2 class="work-heading">A little room to think.</h2><p class="mt-3 text-sm text-base-content/60">What’s due, what’s waiting to be filed, and space for the next thought.</p></section>
     <Link v-if="oldCaptureCount" :href="route('intake', { review: 1 })" class="mb-6 block rounded-xl bg-warning/10 p-4 text-sm">{{ oldCaptureCount }} capture{{ oldCaptureCount === 1 ? ' has' : 's have' }} been waiting for review for more than two days. Review in Intake →</Link>
+    <CalendarNowNext :calendar="calendar" :timezone="options.timezone" />
     <DailyFocus :plan="dailyPlan" :options="options" />
     <div class="grid gap-7 lg:grid-cols-[1.35fr_1fr]">
         <section><div class="mb-4 flex items-center justify-between"><h3 class="font-semibold">Due & overdue <span class="ml-2 text-base-content/40">{{ dueCount }}</span></h3><Link :href="route('bench')" class="text-sm text-primary">Bench →</Link></div><TaskRows :tasks="dueTasks" :options="options" empty="No active tasks due today or overdue." /><Link v-if="dueCount > 7" :href="route('bench')" class="mt-4 inline-block min-h-11 py-3 text-sm text-primary">{{ dueCount - 7 }} more in Bench →</Link></section>

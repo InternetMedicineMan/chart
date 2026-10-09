@@ -10,6 +10,7 @@ use App\Models\Note;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\BriefingObservations;
+use App\Services\CalendarBriefing;
 use App\Services\CaptureService;
 use App\Services\DailyPlanning;
 use App\Services\LocalDate;
@@ -36,6 +37,7 @@ class WorkController extends Controller
         return Inertia::render('Dashboard', [
             'options' => $options->forUser($user),
             'dailyPlan' => $plan,
+            'calendar' => app(CalendarBriefing::class)->forUser($user),
             'quiet' => $states->quiet($snapshot),
             'observations' => app(BriefingObservations::class)->briefing($user),
             'pendingCaptureCount' => Capture::forUser($user)->whereIn('status', ['received', 'processing', 'parsed'])->count(),

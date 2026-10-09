@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActivityController;
+use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\CaptureTokenController;
 use App\Http\Controllers\DailyPlanController;
@@ -27,6 +28,18 @@ Route::get('/up', fn () => response()->json(['status' => 'ok']))->name('health')
 
 Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAuthentication::class])
     ->group(function () {
+        Route::get('/settings/calendar', [CalendarController::class, 'settings'])->name('calendar.settings');
+        Route::post('/settings/calendar/connect', [CalendarController::class, 'connect'])->middleware('throttle:5,1')->name('calendar.connect');
+        Route::get('/settings/calendar/callback', [CalendarController::class, 'callback'])->name('calendar.callback');
+        Route::post('/settings/calendar/refresh', [CalendarController::class, 'refresh'])->middleware('throttle:5,1')->name('calendar.refresh');
+        Route::delete('/settings/calendar/connection', [CalendarController::class, 'disconnect'])->name('calendar.disconnect');
+        Route::put('/settings/calendar/{calendar}', [CalendarController::class, 'selection'])->name('calendar.selection');
+        Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
+        Route::post('/calendar/events', [CalendarController::class, 'store'])->name('calendar.events.store');
+        Route::put('/calendar/events/{event}', [CalendarController::class, 'update'])->name('calendar.events.update');
+        Route::post('/calendar/changes/{mutation}/discard', [CalendarController::class, 'discard'])->name('calendar.changes.discard');
+        Route::post('/calendar/changes/{mutation}/retry', [CalendarController::class, 'retry'])->name('calendar.changes.retry');
+        Route::post('/calendar/changes/{mutation}/undo', [CalendarController::class, 'undo'])->name('calendar.changes.undo');
         Route::get('/dashboard', [WorkController::class, 'dashboard'])->name('dashboard');
         Route::get('/daily-plan/tasks', [DailyPlanController::class, 'tasks'])->name('daily-plan.tasks');
         Route::put('/daily-plan', [DailyPlanController::class, 'update'])->name('daily-plan.update');

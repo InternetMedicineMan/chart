@@ -1,0 +1,21 @@
+<script setup>
+import { ref } from 'vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+defineOptions({ layout: AppLayout });
+defineProps({ configured: Boolean, callbackUrl: String, connection: Object, calendars: Array });
+const busy = ref(false);
+const confirmDisconnect = ref(false);
+const page = usePage();
+const options = { preserveScroll: true, onStart: () => { busy.value = true; }, onFinish: () => { busy.value = false; } };
+const select = (calendar, mode) => router.put(route('calendar.selection', calendar.id), { mode, revision: calendar.revision }, options);
+</script>
+<template>
+    <div class="mb-7 flex flex-wrap items-center justify-between gap-3"><div><p class="work-eyebrow">Connections</p><h2 class="work-heading">Google Calendar</h2></div><Link :href="route('calendar.index')" class="btn btn-ghost text-primary">Calendar →</Link></div>
+    <p v-for="(error, key) in page.props.errors" :key="key" role="alert" class="mb-3 text-sm text-error">{{ error }}</p>
+    <section class="rounded-2xl border border-base-300 bg-base-100 p-6">
+        <template v-if="!configured"><h3 class="font-semibold">Google setup is needed</h3><p class="mt-3 text-sm text-base-content/65">Configure the Calendar OAuth credentials on the server, then return here to connect your account.</p><p class="mt-3 text-sm">Authorized callback URL:</p><code class="mt-2 block break-all text-xs">{{ callbackUrl }}</code></template>
+        <template v-else><p class="text-sm text-base-content/65">{{ connection?.status === 'connected' ? `Connected as ${connection.email}` : connection?.status === 'reauth_required' ? 'Google access expired. Reconnect the same account to resume.' : 'Connect one Google account, then choose its calendars below.' }}</p><p v-if="connection?.error" class="mt-2 text-sm text-warning">{{ connection.error }}</p><div class="mt-4 flex flex-wrap gap-3"><button class="btn btn-primary" :disabled="busy" @click="router.post(route('calendar.connect'), {}, options)">{{ connection?.status === 'connected' ? 'Reconnect Google' : 'Connect Google' }}</button><template v-if="connection?.status === 'connected'"><button class="btn" :disabled="busy" @click="router.post(route('calendar.refresh'), {}, options)">Refresh calendars</button><button class="btn btn-ghost" :disabled="busy" @click="confirmDisconnect = !confirmDisconnect">Disconnect</button></template></div><div v-if="confirmDisconnect" class="mt-4"><p class="text-sm">Disconnecting stops sync and hides these calendars in Chart. Google events remain in Google.</p><button class="btn btn-error mt-3" :disabled="busy" @click="router.delete(route('calendar.disconnect'), options)">Confirm disconnect</button></div></template>
+    </section>
+    <section v-if="connection?.status === 'connected'" class="mt-8"><h3 class="mb-3 font-semibold">Calendar access</h3><p class="mb-5 text-sm text-base-content/60">Calendars start off. Two-way access allows event creation and edits from Chart. Google may notify existing guests when an event changes.</p><div v-if="!calendars.length" class="rounded-xl border border-dashed border-base-300 p-5 text-sm">No calendars loaded yet. Use Refresh calendars.</div><article v-for="calendar in calendars" :key="calendar.id" class="mb-3 rounded-xl border border-base-300 bg-base-100 p-5"><div class="flex flex-wrap items-center justify-between gap-4"><div class="min-w-0"><h4 class="break-words font-medium">{{ calendar.name }}{{ calendar.is_primary ? ' · primary' : '' }}</h4><p class="mt-1 text-xs text-base-content/55">{{ calendar.timezone }} · Google access: {{ calendar.access_role }}</p></div><label class="text-sm">Access<select :value="calendar.mode" class="select mt-1 block w-full" :disabled="busy" @change="select(calendar, $event.target.value)"><option value="off">Off</option><option v-if="['owner','writer','reader'].includes(calendar.access_role)" value="read_only">Read-only</option><option v-if="['owner','writer'].includes(calendar.access_role)" value="two_way">Two-way</option></select></label></div><p class="mt-3 text-xs text-base-content/55">{{ calendar.last_synced_at ? `Last synced ${new Date(calendar.last_synced_at).toLocaleString()}` : 'Not synced yet' }}</p><p v-if="calendar.error" class="mt-2 text-sm text-warning">{{ calendar.error }}</p></article></section>
+</template>

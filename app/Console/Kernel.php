@@ -13,6 +13,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('observations:refresh --scheduled')->everyTenMinutes()->withoutOverlapping();
+        $schedule->command('calendar:sync')->everyFifteenMinutes()->withoutOverlapping();
+        $schedule->command('calendar:sync --writes-only')->everyMinute()->withoutOverlapping();
         $schedule->command('capture:recover')->everyMinute()->withoutOverlapping();
     }
 

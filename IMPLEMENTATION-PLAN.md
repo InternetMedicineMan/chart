@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: voice milestone completion/assignment, subtask creation and initial rule-based Briefing observations are implemented. Observations support scoring, day/week deduplication, snooze/dismissal, immediate reconciliation and expiry. The owner chose an Inbox backlog threshold of three captures older than seven days. Calendar, reminders/push and real-use acceptance remain next. Milestones, recurring checklists, extra touches and the requirement to finish subtasks before parent completion remain in place.
+Latest checkpoint: Google Calendar connection, per-calendar Off/Read-only/Two-way access, durable outgoing create/edit/undo, incremental incoming sync, Now/Next and tomorrow’s load are implemented locally. The owner chose an 8 a.m.–5 p.m. focus window. Google Cloud setup and a live round trip remain unverified until the owner supplies credentials privately and connects Google. Reminders/push, voice Calendar actions and real-use acceptance remain ahead; Phase 1 is not complete.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -369,6 +369,63 @@ php artisan queue:restart
 
 Keep Forge’s existing scheduler and capture worker configuration. The scheduler loads the new observations command automatically; no additional cron entry or dependency is needed. Next: Calendar connection, calendar-load observations, reminders/push and device/offline/real-use acceptance. Ask which calendars are read-only versus two-way before implementing writes.
 
+
+## Google Calendar checkpoint — October 9, 2026
+
+- **Owner decisions:** two-way access is enabled separately for each calendar; newly discovered calendars start Off, and Read-only remains available. Tomorrow’s load uses **8 a.m.–5 p.m. in the Chart timezone**, every day. Overlapping timed events count once. Busy all-day events block the window; transparent and self-declined events do not consume it. This measures unbooked time, not guaranteed uninterrupted focus. Estimates disappear when any selected calendar is stale or unavailable.
+- Added Settings → Google Calendar, a paginated weekly Calendar view, event creation/editing, pending/failed/conflict history, retry/discard and seven-day guarded undo. Now/Next shows up to three events; calendar-load observations use daily deduplication and score 20. Reads make no Google or model calls.
+- The owner-only OAuth callback uses expiring, single-use state bound to the authenticated owner. Tokens are encrypted using the existing APP_KEY and excluded from page props. Calendar-list and event scopes are required; revoked access requests reconnection. One Google account is supported initially, with same-account reconnect. Disconnect removes local credentials and hides cached calendars without changing Google events.
+- Added `calendar_connections`, `connected_calendars`, `calendar_events` and `calendar_mutations`. UTC timestamps and all-day date boundaries are distinct. Calendar/event identifiers are indexed through SHA-256 keys. Incoming sync handles pagination, final-page sync tokens, 410 resets, deletions and recurring exceptions. Recurrences expand in a rolling window from seven days ago to ninety days ahead, separately from the unexpanded token stream. Per-event revisions prevent an older inbound fetch from overwriting an edit made during its request, including within the same second.
+- Writes use an asynchronous calendar queue and a durable request ledger. Creates use stable Google IDs; mutation markers reconcile uncertain responses without duplicating events. Updates and undo use ETag conditions. **Conflict policy:** keep/refetch Google’s version and retain the proposed change for review; discard the proposal before making a fresh edit. Unsure whether Google received a request? Retry/reconcile before discarding. Undo reverses only its own confirmed event version and protects subsequent edits. Existing guests may be notified by Google when their event changes; the editor says so.
+- This release creates ordinary events and edits ordinary events/individual recurring occurrences. Creating or editing recurring series, special Google event types, arbitrary event deletion, voice event commands, multiple connected Google accounts and watch channels remain future work. A newly created event can be undone. Use Google for other deletions/series changes; incoming sync reflects those changes.
+- Local MySQL migration has been applied. Existing capture worker and scheduler were inspected; calendar work uses a separate queue connection with a 360-second reservation timeout. No real Google account has been connected, no real calendar events have been changed, and no production deployment has been performed.
+
+Validation: **192 relevant PHP tests passed across focused runs**, including 34 Calendar tests. The broad regression run passed 188 tests/1,786 assertions; the final Calendar/observations run passed 47 tests/274 assertions after four additional OAuth/selection tests. Coverage includes encrypted credentials, OAuth state/grants/reconnect, ownership, token refresh/revocation, paginated and expired-token sync, recurring cancellations, stale-fetch races, stable IDs, uncertain-write recovery, conditional conflicts/undo, all-day dates/DST, worker interruption, queue recovery and load observations. Client/SSR builds, Pint, route cache and diff checks passed. Desktop and 390px browser checks covered new/edit/discard, read-only controls, the unconfigured Settings state, Now/Next and load, with no page errors or settled-layout overflow. The first phone measurement caught the existing sidebar-padding transition mid-resize; a fresh phone navigation and visual inspection passed. Preview data used isolated SQLite; the preview server is stopped. The local command and schedule listing passed against MySQL; existing capture/scheduler processes remain running. No calendar worker is needed until credentials are configured. Live Google acceptance is still pending.
+
+### Google Cloud setup (owner step; do not paste secrets into chat)
+
+1. Create/select a Google Cloud project for Chart and enable **Google Calendar API** in APIs & Services → Library.
+2. Under **Google Auth Platform**, configure Branding/contact information. Choose **External** audience for a personal Google account, or Internal only when appropriate to your Workspace organization. In Testing, add your own Google account as a test user. Under Data Access, add `https://www.googleapis.com/auth/calendar.calendarlist.readonly` and `https://www.googleapis.com/auth/calendar.events`; Chart also requests `openid` and `email`. See [Google’s consent-screen instructions](https://developers.google.com/workspace/guides/configure-oauth-consent).
+3. Create an OAuth client of type **Web application**. Register the exact authorized redirect URI **`https://chart.internetmedicineman.com/settings/calendar/callback`**. This is separate from any starter social-signup callback. Settings → Google Calendar displays the callback for the current environment. Use a separate development client if testing locally. See [Google’s OAuth client instructions](https://developers.google.com/workspace/guides/create-credentials).
+4. Put the client ID and client secret into Forge’s private environment using the variables below. Keep the existing `APP_KEY` unchanged. Set the production redirect explicitly; no JavaScript origin is needed for this server-side flow.
+5. After deployment/worker setup, sign into Chart, open Settings → Google Calendar, connect and grant the requested permissions. Enable only the calendars you want, selecting Two-way where you want Chart to write. Google permissions can limit which choices are offered.
+6. External apps left in **Testing** get refresh tokens that normally expire after seven days for Calendar scopes. For ongoing use, configure the appropriate production publishing status and comply with any verification requirements Google presents, then reconnect. The personal-use/Workspace exceptions depend on your project/account; do not assume Testing is a permanent credential. See [Google’s refresh-token rules](https://developers.google.com/identity/protocols/oauth2#expiration).
+
+Forge environment:
+
+```dotenv
+GOOGLE_CALENDAR_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
+GOOGLE_CALENDAR_REDIRECT_URI=https://chart.internetmedicineman.com/settings/calendar/callback
+CHART_CALENDAR_QUEUE_CONNECTION=calendar_database
+```
+
+### Forge deployment and worker
+
+Push the checkpoint commit and deploy code/client/SSR assets using the existing Forge flow. Add these commands if they are not already in the deployment script, in this order after the code/assets arrive:
+
+```bash
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan queue:restart
+```
+
+Add a **separate persistent Forge queue worker** with connection `calendar_database`, queue `calendar`, one process, one try and timeout 300 seconds:
+
+```bash
+php artisan queue:work calendar_database --queue=calendar --sleep=3 --tries=1 --timeout=300
+```
+
+Keep the existing capture worker and scheduler. The existing every-minute `schedule:run` entry automatically picks up `calendar:sync` every fifteen minutes and saved-write recovery every minute; do not add duplicate cron entries. For local use, start the same calendar worker once credentials are configured. After connecting/selecting calendars, a manual initial refresh can be queued with:
+
+```bash
+php artisan calendar:sync
+```
+
+Live acceptance still required: create a disposable event without guests from Chart, confirm one copy in Google, edit in each direction, test guarded undo, confirm Read-only prevents edits, and check recurring cancellation/all-day display. Monitor the Settings last-sync/error line and saved-change status. Then continue with voice Calendar commands, reminders/push and the remaining Phase 1 acceptance work.
+
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -499,9 +556,10 @@ Acceptance: a quiet project surfaces automatically; the same project has the sam
 
 ### 6. Calendar, reminders and launch readiness
 
-- [ ] Connect Google as an authenticated integration, store encrypted tokens and configure selected calendars as read-only or two-way.
-- [ ] Implement initial/incremental sync, expired sync-token recovery, deleted/cancelled events, recurring-event instances and a documented conflict policy. Queue outbound writes with stable identities; undo affects only the exact action it reverses.
-- [ ] Show Now/Next and tomorrow's meeting load; add notification feed and Web Push and/or Pushover reminders.
+- [x] Implement authenticated Google connection, encrypted tokens and per-calendar Off/Read-only/Two-way selection. Owner OAuth setup/live acceptance is pending.
+- [x] Implement initial/incremental sync, expired-token recovery, cancellations, recurring instances, durable outbound writes and guarded undo. Mocked API tests pass; live Google acceptance remains pending.
+- [x] Show Now/Next and tomorrow’s booked/unbooked load (8 a.m.–5 p.m., owner timezone).
+- [ ] Add voice Calendar actions and notification feed/Web Push and/or Pushover reminders.
 - [ ] Configure production HTTPS, scheduler, workers, private storage, encrypted backups and a restore procedure. Implement scoped data export.
 - [ ] Run the parser fixtures and scenario checks, install on iPhone, test watch capture on available connection types, and record real-device results separately from automated tests.
 
