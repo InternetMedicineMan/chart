@@ -8,6 +8,7 @@ use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
 use App\Http\Controllers\MilestoneController;
 use App\Http\Controllers\NotificationFeedController;
+use App\Http\Controllers\ObservationController;
 use App\Http\Controllers\ParserPreviewController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
@@ -35,6 +36,8 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::put('/activity/{activity}', [ActivityController::class, 'update'])->name('activity.update');
         Route::delete('/activity/{activity}', [ActivityController::class, 'destroy'])->name('activity.destroy');
         Route::get('/intake', [WorkController::class, 'intake'])->name('intake');
+        Route::get('/observations', [ObservationController::class, 'index'])->name('observations.index');
+        Route::patch('/observations/{observation}', [ObservationController::class, 'update'])->name('observations.update');
         Route::get('/notifications', [NotificationFeedController::class, 'index'])->name('notifications.index');
         Route::post('/notifications/read-all', [NotificationFeedController::class, 'readAll'])->name('notifications.read-all');
         Route::patch('/notifications/{notification}', [NotificationFeedController::class, 'update'])->name('notifications.update');

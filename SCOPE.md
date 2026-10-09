@@ -604,7 +604,7 @@ Each observation carries a **score**, and the Briefing shows the highest-scoring
 | Domain quiet | past that domain's cadence, if its quiet switch is on | 40 | scaled by how far over |
 | Person date (birthday, anniversary, fact) | 7 / 14 / 14 days out | 40–50 | +40 within 3 days |
 | Ideas aging | **≥ 3 ideas unreviewed for 30+ days** — one roll-up item per week | 25 | — |
-| Inbox backlog | untriaged older than 7 days, over a threshold | 20 | — |
+| Inbox backlog | ≥ 3 captures still needing review for over 7 local calendar days (owner confirmed October 9, 2026) | 20 | — |
 | Tomorrow's load | meeting hours vs. free focus time (factual line only) | 20 | — |
 
 - **Urgency mapping:** score ≥ 80 = high, ≥ 30 = normal, below = low. *(Ref. note 2)*
@@ -678,6 +678,7 @@ The parser returns JSON only:
 | `create_project` | name, domain_ref, type, target_date?, lifecycle (active\|someday) | 1 |
 | `capture_idea` | body, related_refs?, tags? → `notes` (kind=thought) | 1 |
 | `complete_milestone` | project_ref, milestone_ref | 1 |
+| `assign_milestone` | task_ref, project_ref?, milestone_ref; existing top-level task and its children, same project | 1 |
 | `create_event` | title, start, end, location?, attendees? | 1 |
 | `log_interaction` | person_ref, kind, summary | 3 |
 | `create_person_fact` | person_ref, fact_type, value, relevant_on?, recurs_yearly? | 3 |

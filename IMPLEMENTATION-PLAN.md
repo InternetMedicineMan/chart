@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: weighted milestones, one-level subtasks, recurring checklists and extra domain/project touch targets are implemented. The owner chose to require all subtasks finished before parent completion. Capture completion uses the same checks and reversible touches. Voice planning and clear-wait actions remain available. The owner has no pre-launch notes to import. Remaining Phase 1 work includes additional parser actions, Briefing observations, Calendar, reminders/push and launch acceptance.
+Latest checkpoint: voice milestone completion/assignment, subtask creation and initial rule-based Briefing observations are implemented. Observations support scoring, day/week deduplication, snooze/dismissal, immediate reconciliation and expiry. The owner chose an Inbox backlog threshold of three captures older than seven days. Calendar, reminders/push and real-use acceptance remain next. Milestones, recurring checklists, extra touches and the requirement to finish subtasks before parent completion remain in place.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -342,6 +342,33 @@ Deployment: local migration applied and the local capture worker gracefully repl
 
 This checkpoint supplies manual structure setup and integrates it with existing task capture completion. Voice milestone completion/assignment and subtask creation remain separate parser work; unsupported structures must be reviewed rather than silently created. Next: those parser actions and the remaining rule-based Briefing observations, followed by Calendar/reminder integration and real-use acceptance. Advanced recurrence patterns remain optional later work.
 
+## Voice structure commands and Briefing observations — October 9, 2026
+
+- Capture now supports `complete_milestone`, `assign_milestone`, and `create_task` with `parent_ref` or `milestone_ref`. New subtasks inherit their existing top-level parent’s home and milestone. Assignment changes an existing top-level task and all its children, including deleted children, within the same project. Milestone completion changes only the milestone; it does not complete tasks or reset cadence. Creating/reopening milestones, clearing assignments and advanced recurrence setup remain manual/review-only.
+- Automatic structure changes require confidence ≥0.8, exact unique owned references, active work, a non-future recording time and records unchanged since recording. Assignment also checks child changes in both preview and execution. Review uses explicit selections and current task/parent/milestone revisions. Capture context includes open milestones and task parent/milestone identity. Seven-day undo preserves later milestone/task/child edits; creation undo now also protects tasks selected in a later daily plan. The existing notification and device-confirmation path is reused; no Shortcut changes.
+- Added the planned `observations` table. Rules cover task due dates, aging/overdue task and project waits, project/domain cadence, project inactivity, aging ideas and old unreviewed captures. Scores use the scope thresholds; overdue expected responses surface even before the seven-day aging threshold. Project cadence and stalled observations share the per-project quiet switch and use the existing effective touch baseline, so completion/extra touches count as recorded activity. No People/content/calendar rules are advertised before those modules exist.
+- **Owner decision:** the weekly Inbox backlog observation fires for **three or more captures still needing review for over seven local calendar days**. Ideas roll up at three or more unreviewed for at least thirty local days. Daily task buckets and weekly slow-signal buckets prevent duplicate rows; older buckets resolve. Dismissal lasts for its bucket; one-day/week snoozes carry across bucket boundaries. Observations resolve when their condition clears and expire after sixty days.
+- `observations:refresh --scheduled` runs through the existing scheduler every ten minutes, creating signals once per owner-local day at or after 02:00. A stored local-day stamp handles skipped/repeated DST hours and catches a missed 02:00 run later that day. `observations:refresh` is the manual initial refresh. No model calls are made for observations. Reading Briefing/Observations reconciles existing signals and scores immediately after completion, edits, waits or parking, but does not generate new nightly signals. Bulk queries and upserts avoid per-subject reads/writes.
+- Briefing shows the five highest-scoring visible observations with an overflow link to paginated active/snoozed/dismissed/resolved views. This replaces the prior standalone computed Gone quiet block with persisted, dismissible signals; Bench/project state strips still use the unchanged fresh state resolver. Captured now includes Inbox, needs-a-decision, sorting and new-ideas-this-week counts. Existing capped due work, Top 3 and waits remain. Calendar load/Now-Next and later-phase blocks remain absent.
+
+Validation: **317 relevant PHP tests passed across focused runs**, including **31 new structure/observation tests**. Coverage includes ownership, stale revisions, ambiguity, inheritance, safe undo, later plans, scores, query growth, mixed upserts, deduplication, cross-bucket snoozes, immediate resolution, expiry, local boundaries and both DST transitions. Client/SSR builds, Pint, route-cache compilation/clear and diff checks passed. The additive migration applied to local MySQL; rollback/reapply passed in isolated SQLite. Desktop and 390px browser checks passed for observation controls and reviewed structure commands, with no overflow/page errors. The browser checks were resumed after correcting a ranking assumption and clearing snoozes left by the interrupted test; neither required an application fix. Existing DaisyUI CSS optimizer warnings remain non-blocking.
+
+Live parsing: **8/8 new synthetic cases passed** on configured GPT-6 Luna, covering milestone completion/assignment, subtask creation, direct milestone task creation, ambiguity and unsupported creation/reopening/backdating. Report: `storage/app/private/parser-evals/20261009-210256-9a968d3c-8b88-4fac-bc32-603fd488b872.json`. Only synthetic context was sent; no owner records or work mutations. The fixture suite now contains 56 cases; the earlier 48 live cases were not rerun in this slice. A first sandbox-blocked connection attempt produced a separate failed report before the successful permitted run.
+
+Local runtime: observation migration and initial refresh completed. The old capture worker exited via `queue:restart`; its replacement uses `database --queue=captures --sleep=1 --tries=1 --timeout=70`. Existing scheduler retained. Isolated preview server stopped after checks. Production remains owner-managed through Forge; no push or deployment performed.
+
+Forge deployment after the normal code/assets release:
+
+```sh
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan observations:refresh
+php artisan queue:restart
+```
+
+Keep Forge’s existing scheduler and capture worker configuration. The scheduler loads the new observations command automatically; no additional cron entry or dependency is needed. Next: Calendar connection, calendar-load observations, reminders/push and device/offline/real-use acceptance. Ask which calendars are read-only versus two-way before implementing writes.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -449,7 +476,8 @@ Acceptance: one dump containing five unrelated items produces five individually 
 - [x] Add manual activity entries with minutes, project/domain touch history and corrections, and monthly time totals.
 - [x] Extend voice/text capture to clearing waits, daily Top 3 and tomorrow’s focus with reviewed, reversible mutations.
 - [x] Add extra task touch targets for domains/projects, including recurring tasks and capture undo.
-- [ ] Add later People/content touch propagation and voice milestone/subtask actions.
+- [x] Add voice milestone completion/assignment and subtask creation with reviewed, reversible actions.
+- [ ] Add later People/content touch propagation when those phases ship.
 - [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
 - [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
 - [x] Implement basic recurrence and voice/manual task completion with successor identity and safe undo; preserve later work and prevent duplicate occurrences or false cadence resets.
@@ -459,13 +487,13 @@ Acceptance: completing a task touches its intended subjects; overdue waits outra
 
 ### 5. Briefing, Bench and project views
 
-- [ ] Replace the SaaS dashboard with capped Briefing blocks, including honest empty states.
+- [x] Replace the SaaS dashboard with capped Briefing blocks and honest empty states for available Phase 1 work. Calendar blocks await integration.
 - [x] Add Bench state filters, domain roll-ups and project state strips alongside existing tasks.
 - [x] Add activity history and monthly time totals to Bench/project views.
 - [x] Add weighted milestone progress to project pages and Bench.
-- [ ] Surface triage older than 48 hours, pending captures and Inbox/Ideas counts.
-- [ ] Add the initial nightly observations with scores, day/week deduplication, snooze/dismissal, auto-resolution and expiry.
-- [ ] Avoid N+1 queries with aggregate counts and eager loading. Paginate history from the start.
+- [x] Surface triage older than 48 hours, pending captures and Inbox/Ideas counts.
+- [x] Add the initial work/ideas/capture observations with scores, day/week deduplication, snooze/dismissal, auto-resolution and expiry. Tomorrow’s calendar load awaits integration.
+- [x] Use bulk queries, aggregate counts and eager loading for implemented work/observations. Paginate capture, activity and observation history.
 
 Acceptance: a quiet project surfaces automatically; the same project has the same state on Briefing and Bench; block limits and overflow links work; unavailable later-phase blocks remain absent. Rule-based observations do not require an AI call on page load.
 

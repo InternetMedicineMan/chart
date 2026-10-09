@@ -9,12 +9,14 @@ use App\Models\CaptureToken;
 use App\Models\Note;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\BriefingObservations;
 use App\Services\CaptureService;
 use App\Services\DailyPlanning;
 use App\Services\LocalDate;
 use App\Services\WaitTracking;
 use App\Services\WorkOptions;
 use App\Services\WorkStateResolver;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,6 +37,10 @@ class WorkController extends Controller
             'options' => $options->forUser($user),
             'dailyPlan' => $plan,
             'quiet' => $states->quiet($snapshot),
+            'observations' => app(BriefingObservations::class)->briefing($user),
+            'pendingCaptureCount' => Capture::forUser($user)->whereIn('status', ['received', 'processing', 'parsed'])->count(),
+            'reviewCaptureCount' => Capture::forUser($user)->whereIn('status', ['needs_triage', 'partially_executed', 'failed'])->count(),
+            'newIdeaCount' => Note::forUser($user)->where('kind', 'thought')->where('created_at', '>=', CarbonImmutable::now($dates->timezone($user))->startOfWeek()->utc())->count(),
             'waiting' => $waits->briefing($user),
             'dueCount' => (clone $due)->count(),
             'dueTasks' => $due->with(['project', 'domain'])->orderBy('due_date')->orderBy('priority')->orderBy('id')->limit(7)->get(),
