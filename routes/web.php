@@ -4,6 +4,7 @@ use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\CaptureTokenController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
+use App\Http\Controllers\NotificationFeedController;
 use App\Http\Controllers\ParserPreviewController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
@@ -24,6 +25,9 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::get('/dashboard', [WorkController::class, 'dashboard'])->name('dashboard');
         Route::get('/bench', [WorkController::class, 'bench'])->name('bench');
         Route::get('/intake', [WorkController::class, 'intake'])->name('intake');
+        Route::get('/notifications', [NotificationFeedController::class, 'index'])->name('notifications.index');
+        Route::post('/notifications/read-all', [NotificationFeedController::class, 'readAll'])->name('notifications.read-all');
+        Route::patch('/notifications/{notification}', [NotificationFeedController::class, 'update'])->name('notifications.update');
         Route::post('/captures', [CaptureController::class, 'store'])->middleware('throttle:30,1')->name('captures.store');
         Route::get('/captures/{capture}', [CaptureController::class, 'show'])->name('captures.show');
         Route::post('/captures/{capture}/retry', [CaptureController::class, 'retry'])->middleware('throttle:10,1')->name('captures.retry');

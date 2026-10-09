@@ -6,6 +6,8 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
+Latest checkpoint: iPhone and Apple Watch capture are working according to the owner's device tests. The in-app notifications feed is now implemented locally (details below); push alerts and Watch offline recovery remain open.
+
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
 Minimal work records implemented October 8, 2026: owned domains and system Inbox, projects and lifecycle, tasks with due dates/times and priority, completion/reopening, soft deletion/recovery, ideas and Someday projects, minimal people storage for upcoming waits, and timezone settings. Bench, project detail, manual Intake, Ideas and work settings are available with desktop/sidebar and phone/bottom navigation. The initial Briefing shows capped due/overdue tasks and real counts. It does not yet include Top 3, cadence states, waits, Calendar or observations.
@@ -204,6 +206,25 @@ Projects containing any tasks, including completed or soft-deleted tasks, cannot
 
 Validation: 50 relevant work-record, access-boundary and capture-pipeline tests passed (670 assertions). Client/SSR builds, route-cache compilation/clear, Pint and diff checks passed. An isolated browser account created a Someday project, cancelled and confirmed deletion, restored it to Ideas, and repeated deletion/restoration at 390px without overflow or page errors. Deploy source/built assets through the normal Forge flow and refresh the route cache before these controls appear in production.
 
+## Device acceptance and capture notifications — October 8, 2026
+
+The owner reports Add to Chart, Brain Dump and Send ChartOutbox working on iPhone, and successful captures from both Watch Chart and Watch Brain Dump. The Watch copies send JSON directly with a separate Watch token and `source=watch`; they do not use the iPhone's local file outbox. These are owner-reported device results, not agent-observed hardware tests. A Watch offline outbox, separate evidence of iPhone airplane-mode recovery, cold offline PWA launch and connection-type coverage remain open.
+
+Implemented the next capture checkpoint:
+
+- A private Notifications screen, desktop navigation entry, header bell with unread count, and mobile More entry. The paginated feed offers all/unread/dismissed views, mark read/unread, dismiss/restore and mark all read. It refreshes every 15 seconds while open, pausing during undo confirmation or a write.
+- Every newly executed task, idea or project action writes exactly one notification in the same database transaction. Low-confidence filings are labeled “check this.” The feed links to the original capture and reuses the existing seven-day undo path, including snapshot and project-child protections. Undo from either Intake or Notifications updates the same notice; dismissing a notice never deletes a work record.
+- One attention notice per capture covers failed sorting and unresolved items. Retry changes it to sorting, and successful resolution removes stale attention wording. Dismissal survives automatic retries. New outcomes do not depend on an AI request at page load.
+- The feed starts with new processing after deployment. Earlier captures keep their existing history and undo controls in Intake; there is no historical notification backfill. Device push delivery, calendar reminders and observation producers remain separate pending work.
+
+Verification: 65 PHP tests passed (685 assertions), including 13 new notification tests for filing atomicity, deduplication, retry/review transitions, owner and 2FA boundaries, pagination, read/dismiss behavior, and safe/expired undo. Client and SSR builds, Pint, route-cache compile/clear and diff checks passed. An isolated SQLite browser account verified desktop and 390px phone rendering, pagination, cancel/confirm undo, dismiss/restore, unread filtering, mark all read and mobile navigation, with no page errors or horizontal overflow. Synthetic preview records stayed out of the owner's database.
+
+Local setup: the new `notifications_feed` table is migrated on local MySQL and the capture worker was restarted with current code. The scheduler was already running. Preview server stopped after verification. The local worker remains a development process, not a startup daemon.
+
+Production rollout: deploy the code and built assets through the existing Forge process, run `php artisan migrate --force`, rebuild cached configuration as usual and run `php artisan queue:restart` after migrations. This checkpoint has not been pushed or deployed by the agent. After deploying, make one new capture and check the bell/Notifications page; older captures do not populate this new feed automatically.
+
+Next unfinished capture item: `capture:import` for pre-launch notes. After that, proceed with waits, daily Top 3, activity/touches and the shared computed work state; offline and push acceptance remain explicitly pending rather than treating the capture gate as fully complete.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -289,12 +310,13 @@ Acceptance: a task can be created, assigned to a valid project/domain, completed
 ### 3. Reliable capture as early as possible
 
 - [x] Add raw captures, items, hashed scoped capture tokens and action logs with per-item undo.
-- [ ] Add the full notification feed and its undo records.
+- [x] Add the in-app notification feed, read/dismiss controls and shared undo records for implemented capture actions. Push delivery and later reminder/observation producers remain in their own checkpoints.
 - [x] Persist session/device capture words and their idempotency key before dispatching any AI job; recover if job dispatch itself fails after the save.
 - [x] Return a quick `202`, with a bounded `?wait=1` path and factual server-derived confirmation, using the existing database queue and persisted retries.
 - [ ] Configure Redis/Horizon if replacing the current database queue; production currently uses the owner-confirmed Forge worker/scheduler setup.
 - [x] Build parser context, action schema, reference resolver and executor from one action registry. Initially advertise tasks, ideas, projects and explicit triage; retain unsupported material for review. Luna passed the live fixture evaluation; real use remains the acceptance gate.
-- [ ] Deliver in-app typed capture, watch/phone shortcuts, brain-dump splitting, triage, capture history and `capture:import`.
+- [x] Deliver in-app typed capture, online watch/phone shortcuts, brain-dump splitting, triage and capture history. Owner reports iPhone and Watch capture working.
+- [ ] Add `capture:import` for pre-launch notes.
 - [x] Build safe per-item retry and seven-day undo for the implemented creation actions. One failed item does not block successful siblings or execute them twice. Later mutation actions need their own reversible effects.
 - [x] Implement the open-app IndexedDB outbox: pending count, stable request keys and replay on open/visibility/online. Retain unsent text through auth expiry and require the same owner to resume submission.
 - [ ] Verify real-device Shortcut offline storage/replay and cold offline app launch separately.

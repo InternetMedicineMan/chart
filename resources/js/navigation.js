@@ -1,4 +1,4 @@
-import { Squares2X2Icon, Cog6ToothIcon, RectangleStackIcon, InboxArrowDownIcon, LightBulbIcon, EllipsisHorizontalIcon } from '@heroicons/vue/24/outline';
+import { Squares2X2Icon, Cog6ToothIcon, RectangleStackIcon, InboxArrowDownIcon, LightBulbIcon, EllipsisHorizontalIcon, BellIcon } from '@heroicons/vue/24/outline';
 
 // Add destinations here as their screens become available.
 export const navigation = [
@@ -6,6 +6,7 @@ export const navigation = [
     { label: 'Bench', route: 'bench', icon: RectangleStackIcon },
     { label: 'Intake', route: 'intake', icon: InboxArrowDownIcon },
     { label: 'Ideas', route: 'ideas', icon: LightBulbIcon },
+    { label: 'Notifications', route: 'notifications.index', icon: BellIcon },
     { label: 'Settings', route: 'profile.show', icon: Cog6ToothIcon },
 ];
 

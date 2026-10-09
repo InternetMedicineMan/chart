@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ArrowLeftStartOnRectangleIcon, Bars3Icon, ChevronDoubleLeftIcon } from '@heroicons/vue/24/outline';
+import { ArrowLeftStartOnRectangleIcon, Bars3Icon, BellIcon, ChevronDoubleLeftIcon } from '@heroicons/vue/24/outline';
 import ChartBrand from '@/Components/ChartBrand.vue';
 import CaptureOutboxStatus from '@/Components/Work/CaptureOutboxStatus.vue';
 import { navigation, mobileNavigation } from '@/navigation';
@@ -14,10 +14,11 @@ const current = computed(() => {
     if (path.startsWith('/bench') || path.startsWith('/projects/')) return 'bench';
     if (path === '/intake' || path.startsWith('/captures/')) return 'intake';
     if (path === '/ideas') return 'ideas';
+    if (path === '/notifications') return 'notifications.index';
     if (path === '/more') return 'more';
     return 'dashboard';
 });
-const mobileCurrent = computed(() => ['profile.show', 'ideas'].includes(current.value) ? 'more' : current.value);
+const mobileCurrent = computed(() => ['profile.show', 'ideas', 'notifications.index'].includes(current.value) ? 'more' : current.value);
 const title = computed(() => [...navigation, ...mobileNavigation].find(item => item.route === current.value)?.label || 'Chart');
 const logout = () => router.post(route('logout'));
 </script>
@@ -48,8 +49,14 @@ const logout = () => router.post(route('logout'));
         <div :class="collapsed ? 'md:pl-24' : 'md:pl-64'" class="transition-[padding]">
             <header class="app-header flex items-center justify-between border-b border-base-300 bg-base-100/90 px-5 py-5 sm:px-9">
                 <div class="flex items-center gap-3"><ChartBrand compact class="md:hidden" /><div><p class="text-xs text-base-content/45">Personal operations</p><h1 class="text-lg font-semibold">{{ title }}</h1></div></div>
-                <button aria-label="Sign out" class="btn btn-ghost min-h-11 md:hidden" @click="logout"><ArrowLeftStartOnRectangleIcon class="h-5 w-5" /></button>
-                <Link v-if="page.props.auth.user.two_factor_confirmed_at" :href="route('intake')" class="btn btn-primary hidden rounded-xl md:inline-flex">+ Add something</Link>
+                <div class="flex items-center gap-2">
+                    <Link v-if="page.props.auth.user.two_factor_confirmed_at" :href="route('notifications.index')" :aria-label="`Notifications, ${page.props.unreadNotifications || 0} unread`" class="btn btn-ghost relative min-h-11 min-w-11">
+                        <BellIcon class="h-5 w-5" />
+                        <span v-if="page.props.unreadNotifications" class="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-content">{{ page.props.unreadNotifications > 99 ? '99+' : page.props.unreadNotifications }}</span>
+                    </Link>
+                    <button aria-label="Sign out" class="btn btn-ghost min-h-11 md:hidden" @click="logout"><ArrowLeftStartOnRectangleIcon class="h-5 w-5" /></button>
+                    <Link v-if="page.props.auth.user.two_factor_confirmed_at" :href="route('intake')" class="btn btn-primary hidden rounded-xl md:inline-flex">+ Add something</Link>
+                </div>
             </header>
             <main id="main-content" tabindex="-1" class="app-content mx-auto max-w-6xl px-5 py-8 sm:px-9 sm:py-10"><div v-if="page.props.message" role="status" class="mb-6 rounded-xl border border-success/20 bg-success/5 px-4 py-3 text-sm text-success">{{ page.props.message }}</div><slot /></main>
         </div>

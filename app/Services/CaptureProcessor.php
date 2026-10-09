@@ -29,6 +29,7 @@ class CaptureProcessor
                 return null;
             }
             $capture->update(['status' => $capture->parsed ? 'parsed' : 'processing', 'lease' => Str::uuid()->toString(), 'lease_until' => now()->addMinutes(2), 'attempts' => $capture->attempts + ($capture->parsed ? 0 : 1)]);
+            app(CaptureNotifications::class)->syncCapture($capture);
 
             return $capture;
         });
@@ -47,6 +48,7 @@ class CaptureProcessor
                         $fallback = Task::withTrashed()->forUser($current->user_id)->lockForUpdate()->find($current->fallback_task_id);
                         if (! $fallback || $fallback->getRawOriginal() != $current->fallback_snapshot) {
                             $current->update(['status' => 'needs_triage', 'error' => 'The Inbox copy has been changed. Keep working from that copy to avoid duplicate work.', 'lease' => null, 'lease_until' => null]);
+                            app(CaptureNotifications::class)->syncCapture($current);
 
                             return false;
                         }

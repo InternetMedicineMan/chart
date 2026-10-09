@@ -75,6 +75,7 @@ class CaptureService
                 $capture->fallback_snapshot = $task->fresh()->getRawOriginal();
             }
             $capture->fill(['status' => 'failed', 'error' => $message])->save();
+            app(CaptureNotifications::class)->syncCapture($capture);
         });
     }
 
@@ -89,6 +90,7 @@ class CaptureService
                 throw ValidationException::withMessages(['capture' => 'This capture already has items or is being sorted. Review its individual items below.']);
             }
             $record->update(['status' => 'received', 'attempts' => 0, 'available_at' => now(), 'lease' => null, 'lease_until' => null, 'error' => null]);
+            app(CaptureNotifications::class)->syncCapture($record);
         });
         $this->dispatch($capture);
     }
@@ -104,10 +106,12 @@ class CaptureService
             $unresolved = $statuses->diff(['executed', 'undone'])->count();
             if ($statuses->contains('pending')) {
                 $capture->update(['status' => 'parsed']);
+                app(CaptureNotifications::class)->syncCapture($capture);
 
                 return;
             }
             $capture->update(['status' => $unresolved ? ($statuses->contains('executed') ? 'partially_executed' : 'needs_triage') : 'executed', 'lease' => null, 'lease_until' => null]);
+            app(CaptureNotifications::class)->syncCapture($capture);
         });
     }
 

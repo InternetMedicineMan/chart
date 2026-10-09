@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\FeedNotification;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tightenco\Ziggy\Ziggy;
@@ -34,6 +35,9 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'appName' => config('app.name'),
             'message' => fn () => $request->session()->get('message'),
+            'unreadNotifications' => fn () => $request->user()?->two_factor_confirmed_at
+                && (int) $request->user()->id === (int) config('chart.owner_id')
+                ? FeedNotification::forUser($request->user())->where('status', 'unread')->count() : 0,
             'ziggy' => fn () => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),

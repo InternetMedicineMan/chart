@@ -149,12 +149,13 @@ PROMPT;
                 $type = match (true) {
                     $target instanceof Task => 'task', $target instanceof Project => 'project', default => 'idea'
                 };
-                ActionLog::create([
+                $log = ActionLog::create([
                     'user_id' => $user->id, 'capture_id' => $capture->id, 'capture_item_id' => $item->id,
                     'action_type' => $data['type'], 'target_type' => $type, 'target_id' => $target->id,
                     'payload' => $data, 'after_snapshot' => $target->fresh()->getRawOriginal(), 'status' => 'ok', 'executed_at' => now(),
                 ]);
                 $item->update(['payload' => $data, 'action_type' => $data['type'], 'confidence' => $data['confidence'], 'target_type' => $type, 'target_id' => $target->id, 'status' => 'executed', 'error' => null, 'candidates' => null, 'executed_at' => now()]);
+                app(CaptureNotifications::class)->filed($log);
             });
         } catch (ValidationException $exception) {
             $item->refresh();
@@ -246,6 +247,7 @@ PROMPT;
             $target->delete();
             $log->update(['status' => 'undone', 'undone_at' => now()]);
             $item->update(['status' => 'undone', 'undone_at' => now()]);
+            app(CaptureNotifications::class)->undone($log);
         });
     }
 }
