@@ -12,7 +12,12 @@ class Task extends Model
 {
     use OwnedByUser, SoftDeletes;
 
-    protected $casts = ['source' => TaskSource::class, 'due_date' => 'date:Y-m-d', 'completed_at' => 'datetime', 'needs_review' => 'boolean', 'priority' => 'integer'];
+    protected $casts = ['source' => TaskSource::class, 'due_date' => 'date:Y-m-d', 'completed_at' => 'datetime', 'needs_review' => 'boolean', 'priority' => 'integer', 'waiting_since' => 'datetime', 'wait_expected_by' => 'date:Y-m-d', 'wait_revision' => 'integer'];
+
+    public function waitingPerson(): BelongsTo
+    {
+        return $this->belongsTo(Person::class, 'waiting_on_person_id');
+    }
 
     public function domain(): BelongsTo
     {

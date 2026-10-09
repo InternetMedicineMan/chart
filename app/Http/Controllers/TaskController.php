@@ -6,6 +6,7 @@ use App\Http\Requests\SaveTaskRequest;
 use App\Models\Domain;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\WaitTracking;
 use App\Services\WorkSetup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,6 +55,7 @@ class TaskController extends Controller
             }
             $record->update(['completed_at' => $data['completed'] ? now() : null]);
             if ($data['completed']) {
+                app(WaitTracking::class)->clear($record);
                 Domain::forUser($request->user())->whereKey($record->domain_id)->update(['last_touched_at' => now()]);
                 Project::forUser($request->user())->whereKey($record->project_id)->update(['last_touched_at' => now()]);
             }

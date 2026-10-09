@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Services\CaptureService;
 use App\Services\DailyPlanning;
 use App\Services\LocalDate;
+use App\Services\WaitTracking;
 use App\Services\WorkOptions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -21,14 +22,15 @@ use Inertia\Response;
 
 class WorkController extends Controller
 {
-    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates, DailyPlanning $planning): Response
+    public function dashboard(Request $request, WorkOptions $options, LocalDate $dates, DailyPlanning $planning, WaitTracking $waits): Response
     {
         $user = $request->user();
-        $due = $planning->activeTasks($user)->whereNull('completed_at')->whereDate('due_date', '<=', $dates->today($user));
+        $due = $planning->activeTasks($user)->whereNull('completed_at')->whereNull('waiting_on_person_id')->whereDate('due_date', '<=', $dates->today($user));
 
         return Inertia::render('Dashboard', [
             'options' => $options->forUser($user),
             'dailyPlan' => $planning->today($user),
+            'waiting' => $waits->briefing($user),
             'dueCount' => (clone $due)->count(),
             'dueTasks' => $due->with(['project', 'domain'])->orderBy('due_date')->orderBy('priority')->orderBy('id')->limit(7)->get(),
             'inboxCount' => Task::forUser($user)->whereNull('completed_at')->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('is_inbox', true))->count(),
@@ -38,13 +40,13 @@ class WorkController extends Controller
         ]);
     }
 
-    public function bench(Request $request, WorkOptions $options): Response
+    public function bench(Request $request, WorkOptions $options, WaitTracking $waits): Response
     {
         $filters = $request->validate([
             'sphere' => ['nullable', Rule::in(['personal', 'work'])],
             'domain' => ['nullable', 'integer'],
-            'status' => ['nullable', Rule::in(['open', 'completed', 'trash'])],
-            'project_status' => ['nullable', Rule::in(['current', 'trash'])],
+            'status' => ['nullable', Rule::in(['open', 'waiting', 'completed', 'trash'])],
+            'project_status' => ['nullable', Rule::in(['current', 'waiting', 'trash'])],
             'q' => ['nullable', 'string', 'max:100'],
         ]);
         $tasks = Task::forUser($request->user())->with(['domain', 'project']);
@@ -54,6 +56,10 @@ class WorkController extends Controller
             $projects->onlyTrashed();
         } else {
             $projects->where('lifecycle', '!=', 'someday');
+            if (($filters['project_status'] ?? null) === 'waiting') {
+                $projects->where('holder', 'other')->where('lifecycle', 'active')
+                    ->whereHas('domain', fn ($query) => $query->where('parked', false)->whereNull('archived_at'));
+            }
         }
         foreach ([$tasks, $projects] as $query) {
             $query->when($filters['domain'] ?? null, fn (Builder $q, $id) => $q->where('domain_id', $id))
@@ -62,37 +68,50 @@ class WorkController extends Controller
         $tasks->when($filters['q'] ?? null, fn (Builder $q, $text) => $q->where('title', 'like', '%'.$text.'%'));
         $projects->when($filters['q'] ?? null, fn (Builder $q, $text) => $q->where('name', 'like', '%'.$text.'%'));
         match ($filters['status'] ?? 'open') {
+            'waiting' => $tasks->whereNull('completed_at')->whereNotNull('waiting_on_person_id')->whereIn('id', app(DailyPlanning::class)->activeTasks($request->user())->select('tasks.id')),
             'completed' => $tasks->whereNotNull('completed_at'),
             'trash' => $tasks->onlyTrashed(),
             default => $tasks->whereNull('completed_at'),
         };
 
+        $projectPage = $projects->orderBy('name')->paginate(12, ['*'], 'projects_page')->withQueryString();
+        $taskPage = $tasks->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString();
+        $waits->decorate($projectPage->getCollection(), $request->user());
+        $waits->decorate($taskPage->getCollection(), $request->user());
+
         return Inertia::render('Work/Bench', [
             'options' => $options->forUser($request->user()), 'filters' => $filters,
-            'projects' => $projects->orderBy('name')->paginate(12, ['*'], 'projects_page')->withQueryString(),
-            'tasks' => $tasks->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString(),
+            'projects' => $projectPage,
+            'tasks' => $taskPage,
         ]);
     }
 
-    public function project(Request $request, int $project, WorkOptions $options): Response
+    public function project(Request $request, int $project, WorkOptions $options, WaitTracking $waits): Response
     {
         $record = Project::forUser($request->user())->with('domain')->withCount([
             'tasks as open_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNull('completed_at'),
             'tasks as completed_tasks_count' => fn (Builder $q) => $q->forUser($request->user())->whereNotNull('completed_at'),
         ])->findOrFail($project);
         $filters = $request->validate(['status' => ['nullable', Rule::in(['open', 'completed'])]]);
+        $waits->decorate($record->newCollection([$record]), $request->user());
+        $tasks = Task::forUser($request->user())->where('project_id', $record->id)
+            ->when(($filters['status'] ?? 'open') === 'completed', fn (Builder $q) => $q->whereNotNull('completed_at'), fn (Builder $q) => $q->whereNull('completed_at'))
+            ->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString();
+        $waits->decorate($tasks->getCollection(), $request->user());
 
         return Inertia::render('Work/Project', [
             'project' => $record, 'options' => $options->forUser($request->user()), 'filters' => $filters,
-            'tasks' => Task::forUser($request->user())->where('project_id', $record->id)
-                ->when(($filters['status'] ?? 'open') === 'completed', fn (Builder $q) => $q->whereNotNull('completed_at'), fn (Builder $q) => $q->whereNull('completed_at'))
-                ->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderByDesc('id')->paginate(20)->withQueryString(),
+            'tasks' => $tasks,
         ]);
     }
 
-    public function intake(Request $request, WorkOptions $options): Response
+    public function intake(Request $request, WorkOptions $options, WaitTracking $waits): Response
     {
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:100'], 'review' => ['nullable', 'boolean']]);
+        $tasks = Task::forUser($request->user())->whereNull('completed_at')
+            ->whereHas('domain', fn (Builder $q) => $q->forUser($request->user())->where('is_inbox', true))
+            ->with('project')->orderByDesc('id')->paginate(20)->withQueryString();
+        $waits->decorate($tasks->getCollection(), $request->user());
 
         return Inertia::render('Work/Intake', [
             'filters' => $filters,
@@ -102,9 +121,7 @@ class WorkController extends Controller
                 ->when($filters['review'] ?? false, fn ($q) => $q->whereIn('status', ['needs_triage', 'partially_executed', 'failed']))
                 ->withCount('items')->latest('id')->paginate(10, ['*'], 'captures_page')->withQueryString(),
             'options' => $options->forUser($request->user()),
-            'tasks' => Task::forUser($request->user())->whereNull('completed_at')
-                ->whereHas('domain', fn (Builder $q) => $q->forUser($request->user())->where('is_inbox', true))
-                ->with('project')->orderByDesc('id')->paginate(20)->withQueryString(),
+            'tasks' => $tasks,
         ]);
     }
 

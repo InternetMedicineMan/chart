@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: daily Top 3 and tomorrow’s focus are implemented, verified and migrated locally. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
+Latest checkpoint: manual task/project waits and expected response dates are implemented and migrated locally, following daily Top 3 and tomorrow’s focus. The owner has no pre-launch notes to import, so `capture:import` is deferred. iPhone/Watch capture and the in-app notification feed are already working; push alerts and Watch offline recovery remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -239,6 +239,19 @@ Verification: 41 relevant PHP tests passed (723 assertions), including 16 daily-
 
 Deployment: apply the `daily_plans` migration with the usual `php artisan migrate --force` after deploying code/assets. No new environment settings, scheduler entries or dependencies. The owner restarted local MySQL after the initial connection refusal; the migration then completed successfully. The isolated preview server was stopped. Nothing was pushed or deployed by the agent.
 
+## Waiting on people and expected responses — October 8, 2026
+
+- Tasks and projects now have a separate Waiting on control: choose an existing person or add a name, optionally set an expected response date, and return the work to “It’s my move.” Normalized duplicate names reuse the existing person; ambiguous duplicate names require an explicit choice. Full People editing remains a later phase.
+- Wait dates are separate from task deadlines and project target dates. Date-only changes preserve the wait start; changing the person starts a new wait. Project hand-offs retain the timestamp when the ball returns to the owner. Completion closes waits, and reopening does not resurrect them. Revision checks reject stale hand-off forms.
+- Briefing shows up to five active waits with person, local calendar days waiting and overdue response dates, plus a link to all waits. Bench has task/project Waiting filters; task rows and project views show the same wait details. Parked/archived domains and non-active projects stay out of the waiting attention block.
+- Waiting tasks leave the due-work block and new Top 3 choices. Tasks already selected for today remain visible with their wait status. Clearing a wait makes an open task eligible again.
+- The migration adds wait fields and extends existing capture snapshots with their default values so unchanged pre-upgrade captures retain safe undo and fallback replacement. A subsequent hand-off changes the snapshot and prevents undo from discarding newer work.
+- This is manual waiting management. Voice `set_waiting`, reversible capture mutations, shared computed project/domain states, inherited state, activity/touches and nightly observations remain pending. No paid AI calls occur in this feature.
+
+Verification: 94 relevant PHP tests passed (1,236 assertions), including 15 wait cases for date preservation, person matching, ownership/2FA, stale edits, completion, dashboard limits, inactive work, Top 3 integration, Chicago/DST dates and migration compatibility with existing capture undo/fallback snapshots. Client/SSR builds, Pint, route-cache compile/clear and diff checks passed. An isolated browser account verified desktop and 390px phone layouts, adding a person, overdue badges, Briefing/Bench filters, clearing a task wait, reusing a person for a project and returning the project to my move. No page errors or horizontal overflow. Synthetic records stayed out of the owner’s database; the preview server was stopped.
+
+Deployment: local MySQL migration completed. Deploy code and built assets through Forge, then run `php artisan migrate --force` before `php artisan queue:restart`; rebuild configuration and route caches through the existing deployment flow. No new environment settings, dependencies or scheduler entries. Nothing was pushed or deployed by the agent.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -339,7 +352,8 @@ Acceptance: one dump containing five unrelated items produces five individually 
 
 ### 4. Complete the work model and computed state
 
-- [ ] Add milestones, subtasks, priorities, due dates/times, waits and expected response dates, recurring tasks and extra touch targets.
+- [x] Add manual task/project waits and expected response dates, person selection, hand-off timestamps and stale-edit protection. Basic priorities and due dates/times were already implemented.
+- [ ] Add milestones, subtasks, recurring tasks and extra touch targets; extend voice capture with reversible waiting actions.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
 - [ ] Add activity entries with minutes and full touch propagation; extend parser actions to daily planning with reversible mutations.
 - [ ] Build the shared `WorkStateResolver`, cache invalidation and parent roll-ups; use it in both Briefing and Bench.

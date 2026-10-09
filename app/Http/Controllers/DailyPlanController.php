@@ -12,7 +12,7 @@ class DailyPlanController extends Controller
 {
     public function tasks(DailyPlanTasksRequest $request, DailyPlanning $planning): JsonResponse
     {
-        $tasks = $planning->activeTasks($request->user())->whereNull('completed_at')
+        $tasks = $planning->activeTasks($request->user())->whereNull('completed_at')->whereNull('waiting_on_person_id')
             ->when($request->validated('q'), fn ($query, $text) => $query->where('title', 'like', '%'.$text.'%'))
             ->with(['domain:id,name', 'project:id,name'])
             ->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('priority')->orderBy('id')

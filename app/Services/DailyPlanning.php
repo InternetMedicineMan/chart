@@ -25,6 +25,7 @@ class DailyPlanning
         $plan = DailyPlan::forUser($user)->whereDate('plan_date', $date)->first();
         $ids = $plan?->top_task_ids ?? [];
         $tasks = $this->activeTasks($user)->whereIn('id', $ids)->with(['domain', 'project'])->get()->keyBy('id');
+        app(WaitTracking::class)->decorate($tasks, $user);
 
         return [
             'plan_date' => $date,
@@ -51,8 +52,8 @@ class DailyPlanning
             }
             $ids = array_map('intval', $data['top_task_ids']);
             $tasks = $this->activeTasks($user)->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
-            if ($tasks->count() !== count($ids) || $tasks->contains(fn (Task $task) => $task->completed_at && ! in_array($task->id, $plan->top_task_ids, true))) {
-                throw ValidationException::withMessages(['top_task_ids' => 'Choose open tasks from active work. A task may have been completed, deleted or parked; reload the plan to check.']);
+            if ($tasks->count() !== count($ids) || $tasks->contains(fn (Task $task) => ($task->completed_at || $task->waiting_on_person_id) && ! in_array($task->id, $plan->top_task_ids, true))) {
+                throw ValidationException::withMessages(['top_task_ids' => 'Choose open tasks that are with you. A task may now be waiting, completed, deleted or parked; reload the plan to check.']);
             }
             $plan->update([
                 'top_task_ids' => $ids,

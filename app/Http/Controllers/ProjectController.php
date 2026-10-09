@@ -6,6 +6,7 @@ use App\Enums\ProjectLifecycle;
 use App\Http\Requests\SaveProjectRequest;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\WaitTracking;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,9 @@ class ProjectController extends Controller
             $attributes = $request->validated() + ['needs_review' => false];
             $attributes['completed_at'] = $attributes['lifecycle'] === ProjectLifecycle::Done->value ? ($record->completed_at ?? now()) : null;
             $record->update($attributes);
+            if (in_array($record->lifecycle, [ProjectLifecycle::Done, ProjectLifecycle::Dropped], true)) {
+                app(WaitTracking::class)->clear($record);
+            }
             // Include deleted tasks so restoring one cannot put it under the project's former domain.
             Task::withTrashed()->forUser($request->user())->where('project_id', $record->id)->update(['domain_id' => $record->domain_id]);
         });
