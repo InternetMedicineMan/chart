@@ -27,7 +27,7 @@ class WaitTracking
                 throw ValidationException::withMessages(['revision' => 'This hand-off changed in another tab or device. Reload before saving.']);
             }
             if (! $data['waiting']) {
-                $this->clear($record);
+                $this->clear($record, $occurredAt);
 
                 return;
             }
@@ -69,11 +69,11 @@ class WaitTracking
     }
 
     /** Call while holding the work record lock. Completion closes an open wait. */
-    public function clear(Task|Project $record): void
+    public function clear(Task|Project $record, ?CarbonInterface $occurredAt = null): void
     {
         $attributes = $record instanceof Task
             ? ['waiting_on_person_id' => null, 'waiting_since' => null]
-            : ['holder' => WorkHolder::Me, 'holder_person_id' => null, 'holder_since' => $record->holder === WorkHolder::Other ? now() : $record->holder_since];
+            : ['holder' => WorkHolder::Me, 'holder_person_id' => null, 'holder_since' => $record->holder === WorkHolder::Other ? ($occurredAt ?? now()) : $record->holder_since];
         $record->fill($attributes + ['wait_expected_by' => null]);
         if ($record->isDirty()) {
             $record->wait_revision++;

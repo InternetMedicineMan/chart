@@ -57,7 +57,7 @@ const date = value => new Date(value).toLocaleString('en-US', { timeZone: props.
                     <button v-if="item.status !== 'dismissed'" class="btn btn-ghost btn-sm min-h-11 text-base-content/50" :disabled="busy" @click="setStatus(item, 'dismissed')">Dismiss</button>
                 </div>
                 <div v-if="confirming === item.id" class="mt-4 rounded-xl bg-base-200 p-4">
-                    <p class="text-sm">Undo this filing? The created item will be removed; your original capture stays saved. Any newer edits are protected.</p>
+                    <p class="text-sm">Undo this filing? This reverses the captured change; your original words stay saved. Any newer edits are protected.</p>
                     <div class="mt-3 flex flex-wrap gap-2"><button class="btn btn-sm min-h-11" :disabled="busy" @click="perform('post', item.undo_url)">Confirm undo</button><button class="btn btn-ghost btn-sm min-h-11" :disabled="busy" @click="confirming = null">Keep item</button></div>
                 </div>
             </article>

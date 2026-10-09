@@ -23,11 +23,14 @@ class CaptureActions
     public const DEFINITIONS = [
         'create_task' => 'A concrete thing to do. Use title, body for details, optional domain_ref/project_ref, due_date/due_time and priority (1 high to 4 low). No reminders, recurrence, waits or subtasks are supported yet.',
         'capture_idea' => 'A thought to keep, not an obligation. Use body only; title, domain_ref, project_ref, dates, priority and lifecycle must be null. Unframed thoughts default to this action.',
-        'create_project' => 'A project to build or start. Use title, body, domain_ref, target_date and lifecycle. Default lifecycle to someday; active only when explicitly asked to start now.',
+        'create_project' => 'A project to build or start. Use title, body, domain_ref, target_date and lifecycle. Default lifecycle to someday; active only when explicitly asked to start now. An explicit someday intention to build or launch a named undertaking is a Someday project; a vague possibility or reflection remains an idea.',
         'log_activity' => 'Work already done on an EXISTING project or domain. Use body as the activity note (max 10000 characters), minutes only if stated, project_ref OR domain_ref, and optional activity_date/activity_time only when stated. Without an explicit time use the original recording time; a date alone uses the recording time of day. Copy the spoken subject reference, do not guess an expanded name. Never turn planned/future work into activity.',
-        'set_waiting' => 'Put an EXISTING open task or active project on hold for an EXISTING person. Use task_ref (with optional project_ref to narrow it) OR project_ref, person_ref, and optional expected_by date. Copy references as spoken, never guess a full name or create a work item. If the subject is missing, preserve it for review. Clearing waits is not supported yet; completing a task is a separate complete_task action.',
+        'set_waiting' => 'Put an EXISTING open task or active project on hold for an EXISTING person. Use task_ref (with optional project_ref to narrow it) OR project_ref, person_ref, and optional expected_by date. Copy references as spoken, never guess a full name or create a work item. If the subject is missing, preserve it for review. Use clear_waiting to end a wait; completing a task is a separate complete_task action.',
         'complete_task' => 'Complete ONE existing open task. Use task_ref, optionally project_ref/domain_ref to disambiguate. For a clear past-tense statement, use the unique matching task title from context; never guess between matches. No new task, project completion, recurrence edits, partial progress or future intentions. An explicitly backdated completion needs_triage; otherwise completion uses the recording time.',
-        'needs_triage' => 'An unclear request or an unsupported action (including backdated or project completion, calendar, reminders, clearing waits, interactions, people facts, Top 3, setting today/tomorrow focus, book/Library records and saving book quotes). Preserve the full excerpt and explain what needs a decision in reason. Never silently downgrade an unsupported request to a task or idea. A daily focus statement is not a new task or a deadline.',
+        'clear_waiting' => 'End an existing task/project wait without completing the work. Use task_ref OR project_ref, optional domain_ref and optional person_ref when explicitly named. For a clear report that the awaited hand-off arrived, use a unique matching existing waiting task/project from context. A person alone without a clear subject is needs_triage. Do not complete tasks or log activity as a side effect.',
+        'set_top3' => 'REPLACE the entire Top 3 for today or tomorrow, in spoken order, using plan_date and task_refs (array of exact existing task titles). Default to today only if no day is stated. Up to three tasks; fewer is fine. Explicitly clearing Top 3 uses an empty task_refs array. Ambiguous, unknown, more than three tasks, or additive requests without a full replacement list need triage. Never create tasks or deadlines.',
+        'set_tomorrow_focus' => 'Set the one-line focus for tomorrow. Use body (max 280 characters) and plan_date for TOMORROW relative to the recording. Preserve the stated focus as text. It is not a task, deadline or Top 3. Requests for other days or to clear focus need triage.',
+        'needs_triage' => 'An unclear request or an unsupported action (including backdated or project completion, calendar, reminders, interactions, people facts, setting today’s focus, book/Library records and saving book quotes). Preserve the full excerpt and explain what needs a decision in reason. Never silently downgrade an unsupported request to a task or idea. A daily focus statement is not a new task or a deadline.',
     ];
 
     public function schema(): array
@@ -41,6 +44,7 @@ class CaptureActions
             'due_date' => $nullable('string'), 'due_time' => $nullable('string'),
             'priority' => $nullable('integer'), 'lifecycle' => ['type' => ['string', 'null'], 'enum' => ['active', 'someday', null]],
             'target_date' => $nullable('string'), 'reason' => $nullable('string'),
+            'plan_date' => $nullable('string'), 'task_refs' => ['type' => ['array', 'null'], 'items' => ['type' => 'string'], 'maxItems' => 3],
             'task_ref' => $nullable('string'), 'person_ref' => $nullable('string'), 'expected_by' => $nullable('string'),
             'minutes' => $nullable('integer'), 'activity_date' => $nullable('string'), 'activity_time' => $nullable('string'),
         ];
@@ -63,7 +67,7 @@ Split into independent items first, then classify each. Preserve every substanti
 
 An excerpt is a verbatim contiguous span of the original text covering the COMPLETE item, not just its title. Include introductory wording, filler, qualifiers and following sentences that modify that item. Every word should be covered by an excerpt; uncovered words are sent to review by the server. For a single item, copy the entire input as its excerpt. For adjacent repetitions of one item, use one combined excerpt covering both. For repetitions separated by unrelated items, emit the same action fields with each occurrence's excerpt; the server merges exact duplicate actions. Never include an unrelated item in another item's excerpt.
 
-References must be text names, not IDs; the server resolves them. Missing project and domain means Inbox only for create_task/create_project; log_activity, set_waiting and complete_task require a named existing subject. Never select an ambiguous reference from context. Activity, waiting or completion confidence below 0.8 requires review. Dates are YYYY-MM-DD and times HH:MM in the supplied timezone, relative to client_captured_at (not retry time). This weekend means Saturday. If a date, reference, AM/PM or intention is uncertain, use needs_triage. No task verb, date or project generally means an idea. Never invent deadlines. Confidence below 0.6 is triage; 0.6–0.8 is filed with review. Only populate fields explicitly allowed by the action description; use null for all other fields.
+References must be text names, not IDs; the server resolves them. Missing project and domain means Inbox only for create_task/create_project; log_activity, set_waiting, clear_waiting and complete_task require a named existing subject. Never select an ambiguous reference from context. Activity, waiting, completion or daily planning confidence below 0.8 requires review. Dates are YYYY-MM-DD and times HH:MM in the supplied timezone, relative to client_captured_at (not retry time). This weekend means Saturday. If a date, reference, AM/PM or intention is uncertain, use needs_triage. No task verb, date or project generally means an idea. Never invent deadlines. Confidence below 0.6 is triage; 0.6–0.8 is filed with review. Only populate fields explicitly allowed by the action description; use null for all other fields.
 
 Supported actions:
 {$actions}
@@ -77,12 +81,14 @@ PROMPT;
             'confidence' => ['required', 'numeric', 'between:0,1'],
             'excerpt' => ['required', 'string', 'max:20000'],
             'title' => ['nullable', 'required_if:type,create_task,create_project', 'string', 'max:255'],
-            'body' => ['nullable', 'required_if:type,capture_idea,log_activity', 'string', 'max:20000'],
+            'body' => ['nullable', 'required_if:type,capture_idea,log_activity,set_tomorrow_focus', 'string', 'max:20000'],
             'domain_ref' => ['nullable', 'string', 'max:100'], 'project_ref' => ['nullable', 'string', 'max:100'],
             'due_date' => ['nullable', 'date_format:Y-m-d'],
             'due_time' => ['nullable', 'date_format:H:i'],
             'priority' => ['nullable', 'integer', 'between:1,4'],
             'lifecycle' => ['nullable', Rule::in(['active', 'someday'])],
+            'plan_date' => ['nullable', 'required_if:type,set_top3,set_tomorrow_focus', 'date_format:Y-m-d'],
+            'task_refs' => ['nullable', 'array', 'max:3'], 'task_refs.*' => ['required', 'string', 'max:255', 'distinct'],
             'task_ref' => ['nullable', 'string', 'max:255'], 'person_ref' => ['nullable', 'string', 'max:100'],
             'expected_by' => ['nullable', 'date_format:Y-m-d'], 'minutes' => ['nullable', 'integer', 'between:1,1440'],
             'activity_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-02'], 'activity_time' => ['nullable', 'date_format:H:i'],
@@ -97,6 +103,12 @@ PROMPT;
         if ($data['type'] === 'log_activity' && mb_strlen($data['body']) > 10000) {
             throw ValidationException::withMessages(['body' => 'Activity notes can be at most 10000 characters.']);
         }
+        if ($data['type'] === 'set_tomorrow_focus' && mb_strlen($data['body']) > 280) {
+            throw ValidationException::withMessages(['body' => 'Keep tomorrow’s focus to 280 characters.']);
+        }
+        if ($data['type'] === 'set_top3' && ! is_array($data['task_refs'] ?? null)) {
+            throw ValidationException::withMessages(['task_refs' => 'Choose the complete Top 3 list, or an empty list to clear it.']);
+        }
         $unknown = array_diff(array_keys($payload), array_keys($this->schema()['properties']['actions']['items']['properties']));
         if ($unknown) {
             throw ValidationException::withMessages(['action' => 'This request contains fields that are not supported yet.']);
@@ -106,9 +118,12 @@ PROMPT;
             'create_project' => ['title', 'body', 'domain_ref', 'lifecycle', 'target_date'],
             'capture_idea' => ['body'],
             'log_activity' => ['body', 'project_ref', 'domain_ref', 'minutes', 'activity_date', 'activity_time'],
+            'set_top3' => ['task_refs', 'plan_date'],
+            'set_tomorrow_focus' => ['body', 'plan_date'],
+            'clear_waiting' => ['task_ref', 'project_ref', 'domain_ref', 'person_ref'],
             'complete_task' => ['task_ref', 'project_ref', 'domain_ref'],
             'set_waiting' => ['task_ref', 'project_ref', 'domain_ref', 'person_ref', 'expected_by'],
-            default => ['title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'priority', 'lifecycle', 'target_date', 'task_ref', 'person_ref', 'expected_by', 'minutes', 'activity_date', 'activity_time'],
+            default => ['task_refs', 'plan_date', 'title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'priority', 'lifecycle', 'target_date', 'task_ref', 'person_ref', 'expected_by', 'minutes', 'activity_date', 'activity_time'],
         };
         foreach (array_diff(array_keys($data), $fields, ['type', 'confidence', 'excerpt', 'reason']) as $field) {
             if ($data[$field] !== null && $data[$field] !== '') {
@@ -131,7 +146,7 @@ PROMPT;
                 }
                 $chosenDomain = $correction['domain_id'] ?? null;
                 $chosenProject = $correction['project_id'] ?? null;
-                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision']));
+                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision', 'top_task_ids', 'plan_revision']));
                 if ($correction) {
                     $correction = array_diff_key($correction, $chosen);
                 }
@@ -147,7 +162,9 @@ PROMPT;
                     throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing it.']);
                 }
                 $before = null;
-                if (in_array($data['type'], CaptureWorkActions::TYPES, true)) {
+                if (in_array($data['type'], CapturePlanActions::TYPES, true)) {
+                    [$target, $type, $before] = app(CapturePlanActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
+                } elseif (in_array($data['type'], CaptureWorkActions::TYPES, true)) {
                     [$target, $type, $before] = app(CaptureWorkActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
                     if ($data['type'] === 'complete_task') {
                         $data['task_ref'] = $target->title;
@@ -230,6 +247,11 @@ PROMPT;
             if ($data['type'] === 'needs_triage' || $data['confidence'] < .6) {
                 throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing.']);
             }
+            if (in_array($data['type'], CapturePlanActions::TYPES, true)) {
+                app(CapturePlanActions::class)->prepare($user, $capture, $data);
+
+                return ['action' => $data, 'outcome' => 'would_file', 'domain' => null, 'project' => null, 'reason' => null];
+            }
             if (in_array($data['type'], CaptureWorkActions::TYPES, true)) {
                 if ($data['confidence'] < .8) {
                     throw ValidationException::withMessages(['action' => 'Review this action before changing work.']);
@@ -280,7 +302,9 @@ PROMPT;
             if (! $log || $log->executed_at->lt(now()->subDays(7))) {
                 throw ValidationException::withMessages(['undo' => 'Undo is available for seven days after filing.']);
             }
-            if (in_array($log->action_type, CaptureWorkActions::TYPES, true)) {
+            if (in_array($log->action_type, CapturePlanActions::TYPES, true)) {
+                app(CapturePlanActions::class)->undo($user, $log);
+            } elseif (in_array($log->action_type, CaptureWorkActions::TYPES, true)) {
                 app(CaptureWorkActions::class)->undo($user, $log);
             } else {
                 $class = match ($log->target_type) {

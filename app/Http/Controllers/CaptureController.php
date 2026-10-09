@@ -7,10 +7,13 @@ use App\Http\Requests\StoreCaptureRequest;
 use App\Models\Capture;
 use App\Models\CaptureAttempt;
 use App\Models\CaptureItem;
+use App\Models\DailyPlan;
+use App\Models\Task;
 use App\Services\CaptureActions;
 use App\Services\CaptureService;
 use App\Services\DailyPlanning;
 use App\Services\WorkOptions;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +36,16 @@ class CaptureController extends Controller
         $workOptions = $options->forUser($request->user());
         $workOptions['captureTimezone'] = $record->timezone;
         $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'due_date', 'revision', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by']);
+
+        $planDates = [$workOptions['today'], CarbonImmutable::parse($workOptions['today'])->addDay()->toDateString()];
+        $plans = DailyPlan::forUser($request->user())->whereIn('plan_date', $planDates)->get()->keyBy(fn ($plan) => $plan->plan_date->toDateString());
+        $names = Task::forUser($request->user())->whereIn('id', $plans->flatMap(fn ($plan) => $plan->top_task_ids)->unique())->pluck('title', 'id');
+        $workOptions['plans'] = collect($planDates)->map(fn ($date) => [
+            'plan_date' => $date, 'revision' => $plans->get($date)?->revision ?? 0,
+            'top_task_names' => collect($plans->get($date)?->top_task_ids ?? [])->map(fn ($id) => $names->get($id, 'Unavailable task'))->all(),
+            'tomorrow_focus' => $plans->get($date)?->tomorrow_focus,
+        ]);
+        $workOptions['tomorrow'] = $planDates[1];
 
         return Inertia::render('Work/Capture', [
             'capture' => $record, 'options' => $workOptions,

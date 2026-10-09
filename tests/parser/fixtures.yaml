@@ -96,6 +96,15 @@
         },
         "due_date": "2026-10-08",
         "recurrence_rule": null
+      },
+      {
+        "title": "report"
+      },
+      {
+        "title": "Acme call"
+      },
+      {
+        "title": "PBE songs"
       }
     ]
   },
@@ -158,20 +167,28 @@
       "text": "My top three tomorrow are the report, the Acme call, and the PBE songs",
       "expected": [
         {
-          "type": "needs_triage"
+          "type": "set_top3",
+          "plan_date": "2026-10-09",
+          "task_refs": [
+            "report",
+            "Acme call",
+            "PBE songs"
+          ]
         }
       ],
-      "capability": "deferred: Top 3"
+      "capability": "implemented: ordered Top 3"
     },
     {
       "id": "tomorrow_focus",
       "text": "Tomorrow's focus is shipping the capture endpoint",
       "expected": [
         {
-          "type": "needs_triage"
+          "type": "set_tomorrow_focus",
+          "plan_date": "2026-10-09",
+          "body_contains": "shipping the capture endpoint"
         }
       ],
-      "capability": "deferred: focus"
+      "capability": "implemented: tomorrow focus"
     },
     {
       "id": "person_fact",
@@ -588,10 +605,11 @@
       "text": "Clear the waiting status from Acme website.",
       "expected": [
         {
-          "type": "needs_triage"
+          "type": "clear_waiting",
+          "project_ref": "Acme website"
         }
       ],
-      "capability": "deferred: clearing waits"
+      "capability": "implemented: clear waiting"
     },
     {
       "id": "explicit_completion",
@@ -659,6 +677,102 @@
       "context": {
         "mode": "dump"
       }
+    },
+    {
+      "id": "clear_received",
+      "text": "Mike sent the logo files for Acme website. Clear that wait.",
+      "expected": [
+        {
+          "type": "clear_waiting",
+          "task_ref": "logo files",
+          "person_ref": "Mike"
+        }
+      ],
+      "context": {
+        "tasks": [
+          {
+            "title": "logo files",
+            "project": {
+              "name": "Acme website"
+            },
+            "waiting_on_person_id": 1,
+            "waiting_person": {
+              "name": "Mike"
+            }
+          }
+        ]
+      },
+      "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "clear_person_ambiguous",
+      "text": "Clear whatever I am waiting on Mike for.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "top_three_clear",
+      "text": "Clear my Top 3 for today.",
+      "expected": [
+        {
+          "type": "set_top3",
+          "plan_date": "2026-10-08",
+          "task_refs": []
+        }
+      ],
+      "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "top_three_four",
+      "text": "Set my Top 3 today to report, Acme call, PBE songs, and Send invoice. Keep all four.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "top_three_additive",
+      "text": "Add report to my current Top 3 without changing the others.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "top_three_evening",
+      "text": "Tomorrow my Top 3 is just report.",
+      "expected": [
+        {
+          "type": "set_top3",
+          "plan_date": "2026-10-09",
+          "task_refs": [
+            "report"
+          ]
+        }
+      ],
+      "context": {
+        "client_captured_at": "2026-10-08T23:30:00-05:00",
+        "current_local_time": "2026-10-09T09:00:00-05:00"
+      },
+      "capability": "implemented: conservative capture planning"
+    },
+    {
+      "id": "focus_today_unsupported",
+      "text": "Change today's focus to writing the book.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "implemented: conservative capture planning"
     }
   ]
 }

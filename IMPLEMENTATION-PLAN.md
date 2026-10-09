@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: task completion now works through voice/text capture, and the task editor supports basic recurring schedules with safe successor generation and undo. Missed dates are skipped on the original schedule, as approved by the owner. Activity/waiting capture, manual daily planning, monthly time totals and shared computed states are implemented. The owner has no pre-launch notes to import, so `capture:import` is deferred. Push alerts and Watch offline recovery remain open.
+Latest checkpoint: voice/text capture now clears existing waits and sets today/tomorrow’s Top 3 and tomorrow’s focus, with review, stale-plan protection, notifications and seven-day undo. Basic recurring tasks and capture completion are implemented; missed dates are skipped on the original schedule, as approved by the owner. The owner has no pre-launch notes to import, so `capture:import` is deferred. Milestones/subtasks, extra touch targets, Calendar, observations and push alerts remain open.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -252,6 +252,7 @@ Verification: 94 relevant PHP tests passed (1,236 assertions), including 15 wait
 
 Deployment: local MySQL migration completed. Deploy code and built assets through Forge, then run `php artisan migrate --force` before `php artisan queue:restart`; rebuild configuration and route caches through the existing deployment flow. No new environment settings, dependencies or scheduler entries. Nothing was pushed or deployed by the agent.
 
+
 ## Computed project and domain states — October 9, 2026
 
 - `WorkStateResolver` computes project and domain state from current owned records: cadence quiet first, overdue waits next, due/overdue or Top 3 tasks, open waits, then finite outcomes with open tasks. The fallback is “No immediate move,” following Section 8.1. Parked/archived domains and parked/Someday/done/dropped projects are excluded from attention.
@@ -309,6 +310,22 @@ Validation: 218 relevant PHP tests passed across focused runs (2,181 assertions)
 Live evaluation: GPT-6 Luna passed **41/41** synthetic cases in one run, including completion, ambiguous completion, partial activity, unsupported backdating/voice recurrence setup and mixed dumps. Report: `storage/app/private/parser-evals/20261009-164440-927bb993-aa84-43d7-b3fc-caf8456a13e2.json`; prompt SHA-256 `9e3e32f7f0ec922d31a3d5eed1e9a935854a3da52cc899cbb56105586729d930`; 58,115 input and 10,978 output tokens. No owner data was sent for this evaluation and no work records were created. Synthetic results are regression evidence, not a real-device accuracy guarantee.
 
 Deployment: local MySQL migration completed and the local capture worker was gracefully replaced with current code; the existing scheduler is unchanged. Deploy code and built assets through Forge, run `php artisan migrate --force`, refresh normal config/route caches, then `php artisan queue:restart`. No push or production deployment was performed. Next capture slices are clearing waits and daily planning; milestones/subtasks, extra touch targets and advanced recurrence remain open.
+
+## Capture planning and clearing waits — October 9, 2026
+
+- Added `clear_waiting` for an exact existing open task or active project. An explicitly named person must match the current hand-off. Clearing does not complete the task or log activity; a project returns to the owner at recording time. Absent/ambiguous waits, future timestamps and edits since recording require review. Reviewed changes require the current wait revision. Undo restores the prior hand-off while protecting later edits.
+- Added `set_top3` for today or tomorrow: replace the full list in spoken order with zero to three unique existing, active, open tasks that are with the owner. Explicit clearing uses an empty list. Missing/ambiguous/unavailable references, overlong lists and additive requests without a complete replacement list go to review; no partial replacement or task creation occurs.
+- Added `set_tomorrow_focus`, a 280-character line for tomorrow. This changes only the focus field and preserves Top 3. The focus is stored on today’s plan using the existing manual-planning convention. Setting today’s focus or clearing a focus through voice remains unsupported and goes to review.
+- Plan changes use owner transaction locks, exact owned task resolution and revisions. Automatic filing refuses recordings from a previous local day or a different timezone, and plans changed at/after recording. Review shows today/tomorrow and requires an explicit current target and revision. Separate fields from one dump may apply together only while their saved snapshot remains current; repeated writes to the same field or intervening edits require review.
+- Review forms show the current plan and preselect unique exact task matches. Clearing all choices requires an explicit checkbox. The Briefing shows tomorrow’s chosen task list; it becomes today’s list when the owner’s local day changes. Existing manual today/focus editing remains available.
+- New actions participate in parser preview, capture history, truthful device confirmations, notifications and seven-day undo. Undo restores only the affected field, but conservatively requires the entire plan snapshot to remain unchanged; a later plan edit, including another field, blocks that older undo. A new empty plan retains its revision after undo to reject stale forms. Original words always remain saved.
+
+Validation: 256 relevant PHP tests passed across focused runs (2,368 assertions), including 38 new planning/clear-wait tests covering atomic replacement, ownership, availability, ambiguity, stale captures/forms, mixed capture execution/retry, undo, future timestamps, Chicago evening dates and DST boundaries. Client/SSR builds, Pint, route-cache compilation/clear and diff checks passed. Isolated desktop and 390px phone browser checks verified reviewed clearing/undo, ordered Top 3, tomorrow’s list, focus/undo preserving tasks, no horizontal overflow and no page errors. Preview records stayed outside the owner’s database; the preview server was stopped. Existing DaisyUI CSS optimizer warnings remain non-blocking.
+
+Live Luna evaluation: **48/48** synthetic cases passed. The first run passed 47/48; a pre-existing Someday example was incorrectly classified as an idea. The action description now distinguishes an explicit future intention to build/launch a named undertaking from a vague reflection; the full rerun passed without weakening expectations. Final report: `storage/app/private/parser-evals/20261009-185629-363c0c8a-cfd2-410d-a844-bf07876c8453.json`. Synthetic context only; no personal records sent.
+
+Deployment: no new migration or Shortcut changes are needed for this checkpoint. Deploy code and built assets through Forge, refresh config/route caches, then `php artisan queue:restart`. The local capture worker was gracefully replaced with current code; scheduler configuration is unchanged. No push or production deployment was performed. Next work-model slice: milestones/subtasks and extra task touch targets, before the remaining Briefing observations and Calendar integration.
+
 
 ## Initial audit
 
@@ -415,7 +432,8 @@ Acceptance: one dump containing five unrelated items produces five individually 
 - [x] Extend voice/text capture with reversible activity logging and waiting updates, exact existing-reference checks, manual review and stale-work protection.
 - [x] Add manual daily Top 3 and tomorrow’s-focus line with local-date boundaries, completion progress and stale-edit protection.
 - [x] Add manual activity entries with minutes, project/domain touch history and corrections, and monthly time totals.
-- [ ] Add extra task touch targets and later People/content propagation; extend parser actions to daily planning with reversible mutations.
+- [x] Extend voice/text capture to clearing waits, daily Top 3 and tomorrow’s focus with reviewed, reversible mutations.
+- [ ] Add extra task touch targets and later People/content propagation.
 - [x] Build shared project/domain `WorkStateResolver` and parent roll-ups; use the same results in Briefing, Bench and project pages.
 - [ ] Add a ten-minute cache with complete mutation/date invalidation if profiling warrants it; current reads compute fresh. Extend computed states to People when that phase ships.
 - [x] Implement basic recurrence and voice/manual task completion with successor identity and safe undo; preserve later work and prevent duplicate occurrences or false cadence resets.

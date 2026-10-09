@@ -213,6 +213,6 @@ class ParserEvaluationTest extends TestCase
         foreach (['brain_dump', 'five_items', 'someday', 'calendar', 'waiting', 'ambiguous_completion', 'evening_timezone', 'spring_dst', 'fall_dst'] as $id) {
             $this->assertContains($id, $ids);
         }
-        $this->assertCount(41, $fixtures['cases']);
+        $this->assertCount(48, $fixtures['cases']);
     }
 }

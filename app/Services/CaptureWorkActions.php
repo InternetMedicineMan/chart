@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\WorkHolder;
 use App\Models\ActionLog;
 use App\Models\ActivityLog;
 use App\Models\Capture;
@@ -17,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 class CaptureWorkActions
 {
-    public const TYPES = ['log_activity', 'set_waiting', 'complete_task'];
+    public const TYPES = ['log_activity', 'set_waiting', 'clear_waiting', 'complete_task'];
 
     public function resolve(User $user, array $data, array $chosen = [], bool $lock = false): array
     {
@@ -26,7 +27,7 @@ class CaptureWorkActions
         $projects = Project::forUser($user)->where('lifecycle', 'active')->whereIn('domain_id', $domains->pluck('id'))->when($domainId, fn ($q) => $q->where('domain_id', $domainId))->get();
         $projectId = $this->exact($data['project_ref'] ?? null, $projects, 'project', $chosen['project_id'] ?? null, false);
         $isTask = filled($data['task_ref'] ?? null) || ! empty($chosen['task_id']);
-        if (in_array($data['type'], ['set_waiting', 'complete_task'], true) && $isTask) {
+        if (in_array($data['type'], ['set_waiting', 'clear_waiting', 'complete_task'], true) && $isTask) {
             $tasks = app(DailyPlanning::class)->activeTasks($user)->whereNull('completed_at')->when($projectId, fn ($q) => $q->where('project_id', $projectId))->when($domainId, fn ($q) => $q->where('domain_id', $domainId))->get(['id', 'title as name']);
             $id = $this->exact($data['task_ref'] ?? null, $tasks, 'task', $chosen['task_id'] ?? null);
             $subject = Task::forUser($user)->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($id);
@@ -35,12 +36,16 @@ class CaptureWorkActions
         } elseif ($data['type'] === 'log_activity' && $domainId) {
             $subject = Domain::forUser($user)->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($domainId);
         } else {
-            throw ValidationException::withMessages(['subject' => $data['type'] === 'set_waiting' ? 'Choose the existing task or project to put on hold.' : ($data['type'] === 'complete_task' ? 'Choose the existing task to complete.' : 'Choose the project or domain for this activity.')]);
+            throw ValidationException::withMessages(['subject' => in_array($data['type'], ['set_waiting', 'clear_waiting'], true) ? 'Choose the existing task or project for this hand-off.' : ($data['type'] === 'complete_task' ? 'Choose the existing task to complete.' : 'Choose the project or domain for this activity.')]);
         }
         $person = null;
-        if ($data['type'] === 'set_waiting') {
+        if ($data['type'] === 'set_waiting' || ($data['type'] === 'clear_waiting' && filled($data['person_ref'] ?? null))) {
             $people = Person::forUser($user)->get();
             $person = $people->find($this->exact($data['person_ref'] ?? null, $people, 'person', $chosen['person_id'] ?? null));
+        }
+
+        if ($data['type'] === 'clear_waiting') {
+            $this->assertWaiting($subject, $person);
         }
 
         return [$subject, $person];
@@ -87,7 +92,7 @@ class CaptureWorkActions
         $this->assertCurrentWait($subject, $capture, $chosen, $reviewed);
         $before = $subject->getRawOriginal();
         $type = $subject instanceof Task ? 'task' : 'project';
-        app(WaitTracking::class)->save($user, $type, $subject->id, ['waiting' => true, 'revision' => $subject->wait_revision, 'person_id' => $person->id, 'expected_by' => $data['expected_by'] ?? null], $capture->client_captured_at);
+        app(WaitTracking::class)->save($user, $type, $subject->id, ['waiting' => $data['type'] === 'set_waiting', 'revision' => $subject->wait_revision, 'person_id' => $person?->id, 'expected_by' => $data['expected_by'] ?? null], $capture->client_captured_at);
 
         return [$subject->fresh(), $type, $before];
     }
@@ -110,8 +115,20 @@ class CaptureWorkActions
         return $occurred->utc();
     }
 
+    private function assertWaiting(Task|Project $subject, ?Person $person): void
+    {
+        $waiting = $subject instanceof Task ? $subject->waiting_on_person_id !== null : $subject->holder === WorkHolder::Other;
+        $currentPerson = $subject instanceof Task ? $subject->waiting_on_person_id : $subject->holder_person_id;
+        if (! $waiting || ($person && $person->id !== $currentPerson)) {
+            throw ValidationException::withMessages(['waiting' => 'This work is not waiting on the stated person, or its wait has already ended. Review the current hand-off.']);
+        }
+    }
+
     public function assertCurrentWait(Task|Project $subject, Capture $capture, array $chosen = [], bool $reviewed = false): void
     {
+        if ($capture->client_captured_at->isFuture()) {
+            throw ValidationException::withMessages(['waiting' => 'The recording time is in the future. Review its time before changing a wait.']);
+        }
         if ($reviewed) {
             if (! isset($chosen['work_revision']) || $subject->wait_revision !== (int) $chosen['work_revision']) {
                 throw ValidationException::withMessages(['revision' => 'This hand-off changed while you were reviewing. Reload the capture and choose it again.']);

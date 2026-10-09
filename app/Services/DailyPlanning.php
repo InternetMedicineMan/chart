@@ -27,7 +27,11 @@ class DailyPlanning
         $tasks = $this->activeTasks($user)->whereIn('id', $ids)->with(['domain', 'project'])->get()->keyBy('id');
         app(WaitTracking::class)->decorate($tasks, $user);
 
+        $tomorrow = DailyPlan::forUser($user)->whereDate('plan_date', CarbonImmutable::parse($date)->addDay()->toDateString())->first();
+        $tomorrowTasks = $this->activeTasks($user)->whereIn('id', $tomorrow?->top_task_ids ?? [])->get(['id', 'title'])->keyBy('id');
+
         return [
+            'tomorrow_tasks' => collect($tomorrow?->top_task_ids ?? [])->map(fn ($id) => $tomorrowTasks->get($id))->filter()->values(),
             'plan_date' => $date,
             'revision' => $plan?->revision ?? 0,
             'tasks' => collect($ids)->map(fn ($id) => $tasks->get($id))->filter()->values(),

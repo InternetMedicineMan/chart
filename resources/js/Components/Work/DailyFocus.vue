@@ -16,6 +16,7 @@ const completed = computed(() => props.plan.tasks.filter(task => task.completed_
         <p v-else class="rounded-2xl border border-dashed border-base-300 p-6 text-sm text-base-content/55">No tasks chosen yet. Start with one; the rest can wait.</p>
         <p v-if="plan.unavailable_count" class="mt-3 text-xs text-base-content/60">{{ plan.unavailable_count }} selected task(s) are no longer active or available. Edit your daily plan to replace them.</p>
         <div class="mt-4 rounded-xl bg-base-100 p-4"><p class="text-xs font-semibold text-base-content/55">Tomorrow’s focus</p><p class="mt-1 break-words text-sm" :class="plan.tomorrow_focus ? '' : 'text-base-content/45'">{{ plan.tomorrow_focus || 'Optional: leave one line for tomorrow when you edit your plan.' }}</p></div>
+        <div v-if="plan.tomorrow_tasks?.length" class="mt-4 rounded-xl border border-base-300 bg-base-100 p-4"><p class="text-xs font-semibold text-base-content/55">Tomorrow’s Top 3</p><ol class="mt-2 list-inside list-decimal space-y-1 text-sm"><li v-for="task in plan.tomorrow_tasks" :key="task.id" class="break-words">{{ task.title }}</li></ol><p class="mt-2 text-xs text-base-content/50">These become today’s Top 3 when the local day changes.</p></div>
         <DailyPlanEditor v-if="editing" :plan="plan" :timezone="options.timezone" @close="editing = false" />
     </section>
 </template>
