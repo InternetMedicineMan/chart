@@ -117,6 +117,23 @@ it('encrypts subscriptions, scopes settings and rejects arbitrary endpoints', fu
     expect(PushSubscription::forUser($this->owner)->count())->toBe(0);
 });
 
+it('shows the latest owned delivery status without exposing subscription credentials', function () {
+    $subscription = PushSubscription::factory()->create(['user_id' => $this->owner->id]);
+    PushDelivery::factory()->create(['user_id' => $this->owner->id, 'push_subscription_id' => $subscription->id, 'status' => 'failed', 'attempts' => 5]);
+    PushDelivery::factory()->create(['user_id' => $this->owner->id, 'push_subscription_id' => $subscription->id, 'status' => 'sent', 'attempts' => 1]);
+    $other = PushSubscription::factory()->create();
+    PushDelivery::factory()->create(['user_id' => $other->user_id, 'push_subscription_id' => $other->id]);
+
+    $this->get(route('push.settings'))->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->has('subscriptions', 1)
+        ->where('subscriptions.0.id', $subscription->id)
+        ->where('subscriptions.0.latest_delivery.status', 'sent')
+        ->where('subscriptions.0.latest_delivery.attempts', 1)
+        ->missing('subscriptions.0.subscription')
+        ->missing('subscriptions.0.endpoint_hash')
+        ->missing('privateKey'));
+});
+
 it('deduplicates completed push jobs and retries transient errors', function () {
     $delivery = PushDelivery::factory()->create(['user_id' => $this->owner->id, 'push_subscription_id' => PushSubscription::factory()->create(['user_id' => $this->owner->id])->id]);
     $push = Mockery::mock(BrowserPush::class);

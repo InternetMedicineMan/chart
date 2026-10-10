@@ -22,7 +22,9 @@ class PushSubscriptionController extends Controller
     public function index(Request $request, BrowserPush $push): Response
     {
         return Inertia::render('Work/PushSettings', ['configured' => $push->configured(), 'publicKey' => config('chart.push.public_key'),
-            'subscriptions' => PushSubscription::forUser($request->user())->get(['id', 'label', 'created_at'])]);
+            'subscriptions' => PushSubscription::forUser($request->user())
+                ->with(['latestDelivery' => fn ($query) => $query->forUser($request->user())->select(['push_deliveries.id', 'push_deliveries.push_subscription_id', 'push_deliveries.status', 'push_deliveries.attempts', 'push_deliveries.updated_at'])])
+                ->get(['id', 'label', 'created_at'])]);
     }
 
     public function store(SavePushSubscriptionRequest $request, BrowserPush $push): JsonResponse
