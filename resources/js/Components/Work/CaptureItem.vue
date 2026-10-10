@@ -1,19 +1,23 @@
 <script setup>
+import ReminderOffsets from '@/Components/Work/ReminderOffsets.vue';
 import { computed, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 const props = defineProps({ item: Object, options: Object });
 const emit = defineEmits(['highlight']);
 const editing = ref(false);
 const form = useForm({
-    type: ['create_task', 'capture_idea', 'create_project', 'log_activity', 'set_waiting', 'clear_waiting', 'set_top3', 'set_tomorrow_focus', 'complete_task', 'complete_milestone', 'assign_milestone'].includes(props.item.action_type) ? props.item.action_type : 'capture_idea',
+    type: ['create_event', 'create_task', 'capture_idea', 'create_project', 'log_activity', 'set_waiting', 'clear_waiting', 'set_top3', 'set_tomorrow_focus', 'complete_task', 'complete_milestone', 'assign_milestone'].includes(props.item.action_type) ? props.item.action_type : 'capture_idea',
+    calendar_id: '', calendar_revision: null, event_start: props.item.payload.event_start || '', event_end: props.item.payload.event_end || '', location: props.item.payload.location || '',
     title: props.item.payload.title || '', body: props.item.payload.body || props.item.excerpt,
     parent_task_id: '', parent_revision: null, milestone_id: '', milestone_revision: null,
     domain_id: '', project_id: '', subject_target: '', wait_target: '', person_id: '', work_revision: null, completion_target: '', task_revision: null,
     minutes: props.item.payload.minutes ?? '', activity_date: props.item.payload.activity_date || '', activity_time: props.item.payload.activity_time || '', expected_by: props.item.payload.expected_by || '',
     plan_date: props.item.payload.plan_date || props.options.today, plan_revision: null, top_slots: ['', '', ''], clear_top3: false,
+    reminder_offsets: props.item.payload.reminder_offsets ?? null,
     due_date: props.item.payload.due_date || '', due_time: props.item.payload.due_time || '',
     priority: props.item.payload.priority || 4, lifecycle: props.item.payload.lifecycle || 'someday', target_date: props.item.payload.target_date || '',
 });
+watch(() => form.calendar_id, value => { form.calendar_revision = props.options.calendars?.find(calendar => calendar.id === Number(value))?.revision ?? null; });
 watch(() => form.wait_target, value => { const [kind, id] = value.split(':'); form.work_revision = (kind === 'task' ? props.options.tasks : props.options.projects).find(record => record.id === Number(id))?.wait_revision ?? null; });
 watch(() => form.completion_target, value => { form.task_revision = props.options.tasks.find(task => task.id === Number(value))?.revision ?? null; });
 watch(() => form.parent_task_id, value => { const parent = props.options.parentTasks.find(task => task.id === Number(value)); form.parent_revision = parent?.revision ?? null; if (parent) { form.project_id = parent.project_id || ''; form.domain_id = parent.domain_id; form.milestone_id = ''; } });
@@ -35,6 +39,7 @@ const act = action => {
     router.post(route(`capture-items.${action}`, props.item.id), {}, { preserveScroll: true, onError: errors => { error.value = Object.values(errors)[0]; }, onFinish: () => { busy.value = false; } });
 };
 const save = () => form.transform(data => {
+    if (data.type === 'create_event') return { type: data.type, title: data.title, body: data.body, location: data.location, calendar_id: data.calendar_id, calendar_revision: data.calendar_revision, event_start: data.event_start, event_end: data.event_end || null };
     if (['complete_milestone', 'assign_milestone'].includes(data.type)) return { type: data.type, project_id: data.project_id, milestone_id: data.milestone_id, milestone_revision: data.milestone_revision, ...(data.type === 'assign_milestone' ? { task_id: data.completion_target, task_revision: data.task_revision } : {}) };
     if (data.type === 'set_top3') return { type: data.type, plan_date: data.plan_date, plan_revision: data.plan_revision, task_refs: [], top_task_ids: data.top_slots.filter(Boolean).map(Number) };
     if (data.type === 'set_tomorrow_focus') return { type: data.type, plan_date: data.plan_date, plan_revision: data.plan_revision, body: data.body };
@@ -47,17 +52,17 @@ const save = () => form.transform(data => {
     }
     return { type: data.type, body: data.body,
         ...(data.type !== 'capture_idea' ? { title: data.title, domain_id: data.domain_id } : {}),
-        ...(data.type === 'create_task' ? { parent_task_id: data.parent_task_id, parent_revision: data.parent_revision, milestone_id: data.milestone_id, milestone_revision: data.milestone_revision, project_id: data.project_id, due_date: data.due_date, due_time: data.due_time, priority: data.priority } : {}),
+        ...(data.type === 'create_task' ? { parent_task_id: data.parent_task_id, parent_revision: data.parent_revision, milestone_id: data.milestone_id, milestone_revision: data.milestone_revision, project_id: data.project_id, due_date: data.due_date, due_time: data.due_time, reminder_offsets: data.reminder_offsets, priority: data.priority } : {}),
         ...(data.type === 'create_project' ? { lifecycle: data.lifecycle, target_date: data.target_date } : {}),
     };
 }).put(route('capture-items.resolve', props.item.id), { preserveScroll: true, onSuccess: () => { editing.value = false; } });
 const milestoneProject = computed(() => props.options.milestones.find(m => m.id === props.item.target_id)?.project_id);
-const destination = () => props.item.target_type === 'milestone' ? (milestoneProject.value ? route('projects.show', milestoneProject.value) : route('bench')) : props.item.target_type === 'daily_plan' ? route('dashboard') : props.item.target_type === 'activity' ? route('activity.index', { entry: props.item.target_id }) : props.item.target_type === 'project' ? route('projects.show', props.item.target_id) : props.item.target_type === 'idea' ? route('ideas') : route('bench', { q: props.options.tasks?.find(task => task.id === props.item.target_id)?.title || props.item.payload.title || props.item.payload.task_ref, status: props.item.action_type === 'complete_task' ? 'completed' : 'open' });
+const destination = () => props.item.target_type === 'calendar_mutation' ? route('calendar.index') : props.item.target_type === 'milestone' ? (milestoneProject.value ? route('projects.show', milestoneProject.value) : route('bench')) : props.item.target_type === 'daily_plan' ? route('dashboard') : props.item.target_type === 'activity' ? route('activity.index', { entry: props.item.target_id }) : props.item.target_type === 'project' ? route('projects.show', props.item.target_id) : props.item.target_type === 'idea' ? route('ideas') : route('bench', { q: props.options.tasks?.find(task => task.id === props.item.target_id)?.title || props.item.payload.title || props.item.payload.task_ref, status: props.item.action_type === 'complete_task' ? 'completed' : 'open' });
 const labels = { executed: 'Filed', needs_triage: 'Needs a decision', failed: 'Could not file', pending: 'Waiting to file', undone: 'Undone' };
 </script>
 <template>
     <article class="rounded-2xl border border-base-300 bg-base-100 p-5">
-        <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold" :class="['needs_triage', 'failed'].includes(item.status) ? 'text-warning' : 'text-base-content/50'">{{ labels[item.status] }}<span v-if="item.status === 'executed' && item.confidence < .8"> · Check this</span></span><button class="text-xs text-primary underline" @click="emit('highlight', item.excerpt)">Show original words</button></div>
+        <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold" :class="['needs_triage', 'failed'].includes(item.status) ? 'text-warning' : 'text-base-content/50'">{{ item.target_type === 'calendar_mutation' && item.status !== 'undone' ? (item.calendar_undo_status ? `Calendar undo: ${item.calendar_undo_status}` : item.calendar_status === 'applied' ? 'Confirmed by Google' : `Calendar: ${item.calendar_status || 'queued'}`) : labels[item.status] }}<span v-if="item.status === 'executed' && item.confidence < .8"> · Check this</span></span><button class="text-xs text-primary underline" @click="emit('highlight', item.excerpt)">Show original words</button></div>
         <blockquote class="mt-3 whitespace-pre-wrap break-words border-l-2 border-primary/25 pl-3 text-sm text-base-content/70">{{ item.excerpt }}</blockquote>
         <p v-if="item.error" class="mt-3 text-sm text-warning">{{ item.error }}</p>
         <p v-if="Object.values(item.candidates || {}).some(candidates => candidates.length)" class="mt-2 text-xs text-base-content/60">Possible matches: {{ Object.values(item.candidates || {}).flat().map(candidate => candidate.name).join(', ') }}</p>
@@ -67,8 +72,8 @@ const labels = { executed: 'Filed', needs_triage: 'Needs a decision', failed: 'C
         </div>
         <p v-if="error" role="alert" class="mt-2 text-sm text-error">{{ error }}</p>
         <form v-if="editing" class="mt-5 space-y-3 border-t border-base-200 pt-4" @submit.prevent="save">
-            <label class="block text-sm">File as<select v-model="form.type" class="select mt-1 w-full"><option value="capture_idea">Idea</option><option value="create_task">Task / subtask</option><option value="complete_milestone">Complete milestone</option><option value="assign_milestone">Assign milestone</option><option value="create_project">Project</option><option value="log_activity">Activity</option><option value="set_waiting">Waiting on</option><option value="complete_task">Complete task</option><option value="clear_waiting">Clear waiting</option><option value="set_top3">Set Top 3</option><option value="set_tomorrow_focus">Tomorrow’s focus</option></select></label>
-            <label v-if="['create_task', 'create_project'].includes(form.type)" class="block text-sm">Name<input v-model="form.title" required maxlength="100" class="input mt-1 w-full" /></label>
+            <label class="block text-sm">File as<select v-model="form.type" class="select mt-1 w-full"><option value="create_event">Calendar event</option><option value="capture_idea">Idea</option><option value="create_task">Task / subtask</option><option value="complete_milestone">Complete milestone</option><option value="assign_milestone">Assign milestone</option><option value="create_project">Project</option><option value="log_activity">Activity</option><option value="set_waiting">Waiting on</option><option value="complete_task">Complete task</option><option value="clear_waiting">Clear waiting</option><option value="set_top3">Set Top 3</option><option value="set_tomorrow_focus">Tomorrow’s focus</option></select></label>
+            <label v-if="['create_task', 'create_project', 'create_event'].includes(form.type)" class="block text-sm">Name<input v-model="form.title" required maxlength="100" class="input mt-1 w-full" /></label>
             <label v-if="!structureAction && !['set_waiting', 'clear_waiting', 'set_top3', 'set_tomorrow_focus', 'complete_task'].includes(form.type)" class="block text-sm">{{ form.type === 'capture_idea' ? 'Thought' : 'Details' }}<textarea v-model="form.body" class="textarea mt-1 w-full" rows="3" :maxlength="form.type === 'log_activity' ? 10000 : 20000" :required="['capture_idea', 'log_activity'].includes(form.type)" /></label>
             <label v-if="['create_task', 'create_project'].includes(form.type)" class="block text-sm">Domain<select v-model="form.domain_id" class="select mt-1 w-full"><option value="">Inbox / project’s domain</option><option v-for="domain in options.domains.filter(d => !d.archived_at)" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
             <template v-if="structureAction">
@@ -77,12 +82,19 @@ const labels = { executed: 'Filed', needs_triage: 'Needs a decision', failed: 'C
                 <label class="block text-sm">Milestone<select v-model="form.milestone_id" class="select mt-1 w-full" required><option value="">Choose an open milestone</option><option v-for="milestone in availableMilestones" :key="milestone.id" :value="milestone.id">{{ milestone.title }}</option></select></label>
                 <p class="text-xs text-base-content/55">{{ form.type === 'complete_milestone' ? 'Marks only this milestone complete. Tasks and activity stay separate.' : 'The task and all its subtasks inherit this milestone.' }}</p>
             </template>
+            <template v-if="form.type === 'create_event'">
+                <label class="block text-sm">Calendar<select v-model="form.calendar_id" class="select mt-1 w-full" required><option value="">Choose a two-way calendar</option><option v-for="calendar in options.calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option></select></label>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block min-w-0 text-sm">Starts<input v-model="form.event_start" type="datetime-local" class="input mt-1 w-full min-w-0" required /></label><label class="block min-w-0 text-sm">Ends (optional)<input v-model="form.event_end" type="datetime-local" class="input mt-1 w-full min-w-0" /></label></div>
+                <label class="block text-sm">Location<input v-model="form.location" class="input mt-1 w-full" maxlength="1000" /></label>
+                <p class="text-xs text-base-content/55">Times use {{ options.timezone }}. Blank end means 60 minutes. Google confirmation follows after saving.</p>
+            </template>
             <template v-if="form.type === 'create_task'">
                 <label class="block text-sm">Parent task (optional)<select v-model="form.parent_task_id" class="select mt-1 w-full"><option value="">Top-level task</option><option v-for="task in options.parentTasks" :key="task.id" :value="task.id">{{ task.title }} · {{ options.projects.find(p => p.id === task.project_id)?.name || options.domains.find(d => d.id === task.domain_id)?.name }}</option></select></label>
                 <label v-if="!form.parent_task_id" class="block text-sm">Milestone (optional)<select v-model="form.milestone_id" class="select mt-1 w-full"><option value="">No milestone</option><option v-for="milestone in availableMilestones" :key="milestone.id" :value="milestone.id">{{ milestone.title }}</option></select></label>
                 <p v-else class="text-xs text-base-content/55">Subtasks inherit the parent’s project, domain and milestone.</p>
                 <label class="block text-sm">Project<select v-model="form.project_id" class="select mt-1 w-full"><option value="">No project</option><option v-for="project in options.projects.filter(p => p.lifecycle === 'active')" :key="project.id" :value="project.id">{{ project.name }} · {{ options.domains.find(d => d.id === project.domain_id)?.name }}</option></select></label>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block min-w-0 text-sm">Due date<input v-model="form.due_date" type="date" class="input mt-1 w-full min-w-0" /></label><label class="block min-w-0 text-sm">Due time<input v-model="form.due_time" type="time" class="input mt-1 w-full min-w-0" /></label></div>
+                <ReminderOffsets v-model="form.reminder_offsets" :enabled="!!form.due_date && !!form.due_time" />
                 <label class="block text-sm">Priority<select v-model.number="form.priority" class="select mt-1 w-full"><option v-for="n in 4" :key="n" :value="n">{{ n }}{{ n === 1 ? ' — Highest' : n === 4 ? ' — Normal' : '' }}</option></select></label>
             </template>
             <template v-if="form.type === 'create_project'"><label class="block text-sm">When<select v-model="form.lifecycle" class="select mt-1 w-full"><option value="someday">Someday</option><option value="active">Start now</option></select></label><label class="block text-sm">Target date<input v-model="form.target_date" type="date" class="input mt-1 w-full min-w-0" /></label></template>

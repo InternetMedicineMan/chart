@@ -86,7 +86,7 @@ class CaptureStructureActions
                 'domain_id' => $task?->domain_id ?? Project::forUser($user)->findOrFail($projectId)->domain_id,
                 'project_id' => $projectId, 'parent_task_id' => $task?->id, 'milestone_id' => $milestone?->id,
             ]);
-            $target = Task::create($attributes + ['user_id' => $user->id, 'title' => $data['title'], 'notes' => $data['body'] ?? null, 'due_date' => $data['due_date'] ?? null, 'due_time' => $data['due_time'] ?? null, 'priority' => $data['priority'] ?? 4]);
+            $target = Task::create($attributes + ['user_id' => $user->id, 'title' => $data['title'], 'notes' => $data['body'] ?? null, 'due_date' => $data['due_date'] ?? null, 'due_time' => $data['due_time'] ?? null, 'reminder_offsets' => $data['reminder_offsets'] ?? null, 'priority' => $data['priority'] ?? 4]);
 
             return [$target, 'task', null];
         }

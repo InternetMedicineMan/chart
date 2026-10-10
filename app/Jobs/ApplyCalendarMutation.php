@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Services\CalendarWriting;
+use App\Services\CaptureCalendarActions;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -27,5 +28,6 @@ class ApplyCalendarMutation implements ShouldBeUnique, ShouldQueue
     public function handle(CalendarWriting $writing): void
     {
         $writing->apply($this->userId, $this->mutationId);
+        app(CaptureCalendarActions::class)->reconcile($this->userId);
     }
 }

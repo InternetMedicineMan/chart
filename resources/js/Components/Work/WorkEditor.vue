@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import ReminderOffsets from '@/Components/Work/ReminderOffsets.vue';
 import { useForm } from '@inertiajs/vue3';
 
 const props = defineProps({ kind: String, record: Object, parentTask: Object, options: Object, domainId: [String, Number], projectId: [String, Number] });
@@ -13,6 +14,7 @@ const form = useForm(props.kind === 'task' ? {
     touch_target: item.touch_target_type ? `${item.touch_target_type}:${item.touch_target_id}` : '',
     title: item.title || '', notes: item.notes || '', domain_id: item.domain_id || props.parentTask?.domain_id || props.domainId || '',
     project_id: item.project_id || props.parentTask?.project_id || props.projectId || '', priority: item.priority || 4,
+    reminder_offsets: item.reminder_offsets ?? null,
     due_date: item.due_date || '', due_time: item.due_time?.slice(0, 5) || '', revision: item.revision ?? 0,
     repeat: repeatParts.FREQ || '', repeat_interval: Number(repeatParts.INTERVAL || 1), repeat_until: repeatParts.UNTIL?.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') || '',
 } : props.kind === 'project' ? {
@@ -62,7 +64,7 @@ onMounted(() => dialog.value.showModal());
                         <label v-if="form.project_id" class="work-label">Milestone<select v-model="form.milestone_id" class="work-input" :disabled="!!form.parent_task_id"><option value="">No milestone</option><option v-for="milestone in options.milestones?.filter(m => m.project_id === Number(form.project_id))" :key="milestone.id" :value="milestone.id">{{ milestone.title }}{{ milestone.completed_at ? ' (completed)' : '' }}</option></select></label>
                         <label class="work-label">Also touch when completed<select v-model="form.touch_target" class="work-input"><option value="">No extra target</option><optgroup label="Domains"><option v-for="domain in options.domains.filter(d => !d.archived_at)" :key="domain.id" :value="`domain:${domain.id}`">{{ domain.name }}</option></optgroup><optgroup label="Projects"><option v-for="project in options.projects" :key="project.id" :value="`project:${project.id}`">{{ project.name }}</option></optgroup></select><span class="text-xs font-normal text-base-content/55">Completion already touches this task’s project and domain.</span></label>
                         <div class="grid grid-cols-2 gap-4"><label class="work-label">Due date<input v-model="form.due_date" type="date" class="work-input" /></label><label class="work-label">Due time<input v-model="form.due_time" type="time" class="work-input" /></label></div>
-                        <p class="text-xs text-base-content/55">Times use {{ options.timezone }}.</p>
+                        <ReminderOffsets v-model="form.reminder_offsets" :enabled="!!form.due_date && !!form.due_time" /><p class="text-xs text-base-content/55">Times use {{ options.timezone }}.</p>
                         <fieldset v-if="!form.parent_task_id" class="space-y-3 rounded-xl border border-base-300 p-4" :disabled="!!item.completed_at">
                             <legend class="px-1 text-sm font-semibold">Repeat</legend>
                             <label class="work-label">Frequency<select v-model="form.repeat" class="work-input"><option value="">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select></label>

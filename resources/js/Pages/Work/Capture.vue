@@ -12,7 +12,7 @@ const original = ref(null);
 const polling = usePoll(8000, { only: ['capture', 'attempts'] }, { autoStart: false });
 watchEffect(() => {
     if (typeof window === 'undefined') return;
-    const working = ['received', 'processing', 'parsed'].includes(props.capture.status) || (props.aiEnabled && props.capture.status === 'failed' && props.capture.attempts < 3);
+    const working = props.capture.items.some(item => item.calendar_status === 'pending' || item.calendar_undo_status === 'pending') || ['received', 'processing', 'parsed'].includes(props.capture.status) || (props.aiEnabled && props.capture.status === 'failed' && props.capture.attempts < 3);
     working ? polling.start() : polling.stop();
 });
 const parts = computed(() => {

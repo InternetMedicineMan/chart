@@ -114,7 +114,7 @@ class CalendarController extends Controller
             if ($mode !== 'two_way' && CalendarMutation::forUser($request->user())->where('connected_calendar_id', $record->id)->where('status', 'pending')->exists()) {
                 throw ValidationException::withMessages(['calendar' => 'Wait for or discard queued calendar changes before changing access.']);
             }
-            $record->update(['mode' => $mode, 'revision' => $record->revision + 1]);
+            $record->update(['mode' => $mode, 'revision' => $record->revision + 1] + ($request->exists('reminder_minutes') ? ['reminder_minutes' => $request->validated('reminder_minutes')] : []));
 
             return $record;
         });

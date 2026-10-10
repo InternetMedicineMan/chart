@@ -5,6 +5,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\CaptureTokenController;
 use App\Http\Controllers\DailyPlanController;
+use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\IdeaController;
 use App\Http\Controllers\MilestoneController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\NotificationFeedController;
 use App\Http\Controllers\ObservationController;
 use App\Http\Controllers\ParserPreviewController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\WorkController;
 use App\Http\Controllers\WorkWaitController;
@@ -28,6 +30,11 @@ Route::get('/up', fn () => response()->json(['status' => 'ok']))->name('health')
 
 Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAuthentication::class])
     ->group(function () {
+        Route::get('/settings/export', DataExportController::class)->middleware('throttle:2,1,data-export')->name('work.export');
+        Route::get('/settings/notifications', [PushSubscriptionController::class, 'index'])->name('push.settings');
+        Route::post('/settings/notifications/subscriptions', [PushSubscriptionController::class, 'store'])->middleware('throttle:10,1,push-store')->name('push.store');
+        Route::delete('/settings/notifications/subscriptions/{subscription}', [PushSubscriptionController::class, 'destroy'])->name('push.destroy');
+        Route::post('/settings/notifications/subscriptions/{subscription}/test', [PushSubscriptionController::class, 'test'])->middleware('throttle:3,1,push-test')->name('push.test');
         Route::get('/settings/calendar', [CalendarController::class, 'settings'])->name('calendar.settings');
         Route::post('/settings/calendar/connect', [CalendarController::class, 'connect'])->middleware('throttle:5,1')->name('calendar.connect');
         Route::get('/settings/calendar/callback', [CalendarController::class, 'callback'])->name('calendar.callback');

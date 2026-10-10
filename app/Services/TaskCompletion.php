@@ -29,9 +29,9 @@ class TaskCompletion
         $childSnapshots = [];
         if ($next) {
             $successor = Task::create(array_intersect_key($before, array_flip(['user_id', 'domain_id', 'project_id', 'milestone_id', 'touch_target_type', 'touch_target_id', 'title', 'notes', 'priority', 'due_time', 'source', 'recurrence_rule', 'recurrence_anchor', 'recurrence_timezone']))
-                + $next + ['recurrence_parent_id' => $task->id]);
+                + $next + ['reminder_offsets' => $task->reminder_offsets, 'recurrence_parent_id' => $task->id]);
             foreach ($task->subtasks()->forUser($user)->get() as $child) {
-                $attributes = $child->only(['user_id', 'domain_id', 'project_id', 'milestone_id', 'title', 'notes', 'priority', 'due_time', 'touch_target_type', 'touch_target_id', 'source']);
+                $attributes = $child->only(['user_id', 'domain_id', 'project_id', 'milestone_id', 'title', 'notes', 'priority', 'due_time', 'reminder_offsets', 'touch_target_type', 'touch_target_id', 'source']);
                 $offset = $child->due_date ? (int) $task->due_date->diffInDays($child->due_date, false) : null;
                 $copy = Task::create($attributes + ['parent_task_id' => $successor->id, 'due_date' => $offset !== null ? CarbonImmutable::parse($next['due_date'])->addDays($offset)->toDateString() : null]);
                 $childSnapshots[] = $copy->fresh()->getRawOriginal();

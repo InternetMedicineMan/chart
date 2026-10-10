@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\PushSubscription;
 use App\Services\CaptureParser;
 use App\Services\OpenAICaptureParser;
 use App\Services\SchemaOrg;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
@@ -31,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Model::unguard();
+        Event::listen(Logout::class, function ($event) {
+            if ($event->user && request()->hasSession() && ($id = request()->session()->pull('chart_push_subscription'))) {
+                PushSubscription::forUser($event->user)->whereKey($id)->delete();
+            }
+        });
 
         // View::share(['schema' => ['organization' => app(SchemaOrg::class)->organization()]]);
     }

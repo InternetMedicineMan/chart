@@ -12,6 +12,7 @@ class CaptureNotifications
     public function filed(ActionLog $log): void
     {
         $label = match ($log->target_type) {
+            'calendar_mutation' => 'Calendar event queued',
             'task' => 'Task added',
             'project' => ($log->payload['lifecycle'] ?? 'someday') === 'someday' ? 'Someday project added' : 'Project added',
             default => 'Idea saved',

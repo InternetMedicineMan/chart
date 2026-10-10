@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ResolveCaptureItemRequest;
 use App\Http\Requests\StoreCaptureRequest;
+use App\Models\CalendarMutation;
 use App\Models\Capture;
 use App\Models\CaptureAttempt;
 use App\Models\CaptureItem;
 use App\Models\DailyPlan;
 use App\Models\Task;
 use App\Services\CaptureActions;
+use App\Services\CaptureCalendarActions;
 use App\Services\CaptureService;
 use App\Services\DailyPlanning;
 use App\Services\WorkOptions;
@@ -34,6 +36,15 @@ class CaptureController extends Controller
         $record = Capture::forUser($request->user())->with(['items' => fn ($q) => $q->forUser($request->user())->orderBy('sequence')])->findOrFail($capture);
 
         $workOptions = $options->forUser($request->user());
+        $workOptions['calendars'] = app(CaptureCalendarActions::class)->calendars($request->user())->get(['id', 'name', 'revision']);
+        $changes = CalendarMutation::forUser($request->user())->whereIn('id', $record->items->where('target_type', 'calendar_mutation')->pluck('target_id'))->get()->keyBy('id');
+        $undos = CalendarMutation::forUser($request->user())->whereIn('undo_of_id', $changes->keys())->get()->keyBy('undo_of_id');
+        foreach ($record->items as $item) {
+            if ($item->target_type === 'calendar_mutation') {
+                $item->setAttribute('calendar_status', $changes->get($item->target_id)?->status);
+                $item->setAttribute('calendar_undo_status', $undos->get($item->target_id)?->status);
+            }
+        }
         $workOptions['captureTimezone'] = $record->timezone;
         $workOptions['tasks'] = app(DailyPlanning::class)->activeTasks($request->user())->whereNull('completed_at')->orderBy('title')->get(['id', 'title', 'project_id', 'domain_id', 'due_date', 'revision', 'wait_revision', 'waiting_on_person_id', 'wait_expected_by', 'parent_task_id', 'milestone_id']);
 
@@ -67,7 +78,7 @@ class CaptureController extends Controller
         $actions->execute($record, $request->validated() + ['confidence' => 1, 'excerpt' => $record->excerpt]);
         $service->summarize(Capture::forUser($request->user())->findOrFail($record->capture_id));
 
-        return back()->with('message', $record->fresh()->status === 'executed' ? 'Item filed.' : 'Item still needs review. Your original words are safe.');
+        return back()->with('message', $record->fresh()->status === 'executed' ? ($record->fresh()->action_type === 'create_event' ? 'Calendar event queued. Waiting for Google confirmation.' : 'Item filed.') : 'Item still needs review. Your original words are safe.');
     }
 
     public function retryItem(Request $request, int $item, CaptureActions $actions, CaptureService $service): RedirectResponse
@@ -76,7 +87,7 @@ class CaptureController extends Controller
         $actions->execute($record);
         $service->summarize(Capture::forUser($request->user())->findOrFail($record->capture_id));
 
-        return back()->with('message', $record->fresh()->status === 'executed' ? 'Item filed.' : 'Item still needs review.');
+        return back()->with('message', $record->fresh()->status === 'executed' ? ($record->fresh()->action_type === 'create_event' ? 'Calendar event queued. Waiting for Google confirmation.' : 'Item filed.') : 'Item still needs review.');
     }
 
     public function undo(Request $request, int $item, CaptureActions $actions, CaptureService $service): RedirectResponse
@@ -85,6 +96,6 @@ class CaptureController extends Controller
         $actions->undo($record);
         $service->summarize(Capture::forUser($request->user())->findOrFail($record->capture_id));
 
-        return back()->with('message', 'Filing undone. Your original capture is still here.');
+        return back()->with('message', $record->fresh()->status === 'undone' ? 'Filing undone. Your original capture is still here.' : 'Calendar undo queued. Waiting for Google confirmation.');
     }
 }

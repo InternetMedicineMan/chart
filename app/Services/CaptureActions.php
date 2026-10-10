@@ -22,7 +22,8 @@ use Throwable;
 class CaptureActions
 {
     public const DEFINITIONS = [
-        'create_task' => 'A concrete thing to do. Use title, body for details, optional domain_ref/project_ref, due_date/due_time and priority (1 high to 4 low). Use parent_ref for an existing open top-level parent task; subtasks inherit its project, domain and milestone. Use milestone_ref with project_ref to assign a new top-level task to an existing open milestone. No reminders, recurrence or waits are supported here.',
+        'create_event' => 'Schedule a new timed calendar event. Use title, optional body/location/calendar_ref, event_start and optional event_end as YYYY-MM-DDTHH:MM in the recording timezone. Without an end use the approved 60-minute default. Only create events; requests to invite attendees, repeat, edit, delete, create all-day events or customize event reminders need triage. Never silently drop these details. A named person may be part of the title, but never invite anyone. Confidence below 0.8 requires review.',
+        'create_task' => 'A concrete thing to do. Use title, body for details, optional domain_ref/project_ref, due_date/due_time and priority (1 high to 4 low). Use parent_ref for an existing open top-level parent task; subtasks inherit its project, domain and milestone. Use milestone_ref with project_ref to assign a new top-level task to an existing open milestone. Timed tasks remind at their due time by default. Use reminder_offsets (minutes before due time, up to 5 offsets, 0 through 10080) only when explicitly stated; [] means no reminders, null uses the default. Reminders require a due date AND time. Recurrence and waits are not supported here.',
         'complete_milestone' => 'Complete an existing open milestone using project_ref and milestone_ref. No task completion, activity, backdating, reopening or milestone creation; those requests need triage.',
         'assign_milestone' => 'Assign an existing open top-level task to an existing open milestone in the same project. Use task_ref, project_ref and milestone_ref. Its subtasks inherit the assignment. No moving between projects, clearing assignments or assigning a child independently.',
         'capture_idea' => 'A thought to keep, not an obligation. Use body only; title, domain_ref, project_ref, dates, priority and lifecycle must be null. Unframed thoughts default to this action.',
@@ -33,7 +34,7 @@ class CaptureActions
         'clear_waiting' => 'End an existing task/project wait without completing the work. Use task_ref OR project_ref, optional domain_ref and optional person_ref when explicitly named. For a clear report that the awaited hand-off arrived, use a unique matching existing waiting task/project from context. A person alone without a clear subject is needs_triage. Do not complete tasks or log activity as a side effect.',
         'set_top3' => 'REPLACE the entire Top 3 for today or tomorrow, in spoken order, using plan_date and task_refs (array of exact existing task titles). Default to today only if no day is stated. Up to three tasks; fewer is fine. Explicitly clearing Top 3 uses an empty task_refs array. Ambiguous, unknown, more than three tasks, or additive requests without a full replacement list need triage. Never create tasks or deadlines.',
         'set_tomorrow_focus' => 'Set the one-line focus for tomorrow. Use body (max 280 characters) and plan_date for TOMORROW relative to the recording. Preserve the stated focus as text. It is not a task, deadline or Top 3. Requests for other days or to clear focus need triage.',
-        'needs_triage' => 'An unclear request or an unsupported action (including backdated or project completion, calendar, reminders, interactions, people facts, setting today’s focus, book/Library records and saving book quotes). Preserve the full excerpt and explain what needs a decision in reason. Never silently downgrade an unsupported request to a task or idea. A daily focus statement is not a new task or a deadline.',
+        'needs_triage' => 'An unclear request or an unsupported action (including backdated or project completion, calendar edits/invitations/recurrence, reminders without a specific task date and time, interactions, people facts, setting today’s focus, book/Library records and saving book quotes). Preserve the full excerpt and explain what needs a decision in reason. Never silently downgrade an unsupported request to a task or idea. A daily focus statement is not a new task or a deadline.',
     ];
 
     public function schema(): array
@@ -50,6 +51,8 @@ class CaptureActions
             'plan_date' => $nullable('string'), 'task_refs' => ['type' => ['array', 'null'], 'items' => ['type' => 'string'], 'maxItems' => 3],
             'parent_ref' => $nullable('string'), 'milestone_ref' => $nullable('string'),
             'task_ref' => $nullable('string'), 'person_ref' => $nullable('string'), 'expected_by' => $nullable('string'),
+            'reminder_offsets' => ['type' => ['array', 'null'], 'items' => ['type' => 'integer'], 'maxItems' => 5],
+            'calendar_ref' => $nullable('string'), 'event_start' => $nullable('string'), 'event_end' => $nullable('string'), 'location' => $nullable('string'),
             'minutes' => $nullable('integer'), 'activity_date' => $nullable('string'), 'activity_time' => $nullable('string'),
         ];
 
@@ -84,11 +87,14 @@ PROMPT;
             'type' => ['required', Rule::in(array_keys(self::DEFINITIONS))],
             'confidence' => ['required', 'numeric', 'between:0,1'],
             'excerpt' => ['required', 'string', 'max:20000'],
-            'title' => ['nullable', 'required_if:type,create_task,create_project', 'string', 'max:255'],
+            'title' => ['nullable', 'required_if:type,create_task,create_project,create_event', 'string', 'max:255'],
             'body' => ['nullable', 'required_if:type,capture_idea,log_activity,set_tomorrow_focus', 'string', 'max:20000'],
             'domain_ref' => ['nullable', 'string', 'max:100'], 'project_ref' => ['nullable', 'string', 'max:100'],
+            'reminder_offsets' => ['nullable', 'array', 'max:5'], 'reminder_offsets.*' => ['required', 'integer', 'between:0,10080', 'distinct'],
             'due_date' => ['nullable', 'date_format:Y-m-d'],
             'due_time' => ['nullable', 'date_format:H:i'],
+            'calendar_ref' => ['nullable', 'string', 'max:255'], 'location' => ['nullable', 'string', 'max:1000'],
+            'event_start' => ['nullable', 'required_if:type,create_event', 'date_format:Y-m-d\TH:i'], 'event_end' => ['nullable', 'date_format:Y-m-d\TH:i'],
             'priority' => ['nullable', 'integer', 'between:1,4'],
             'lifecycle' => ['nullable', Rule::in(['active', 'someday'])],
             'plan_date' => ['nullable', 'required_if:type,set_top3,set_tomorrow_focus', 'date_format:Y-m-d'],
@@ -99,6 +105,9 @@ PROMPT;
             'activity_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-02'], 'activity_time' => ['nullable', 'date_format:H:i'],
             'target_date' => ['nullable', 'date_format:Y-m-d'], 'reason' => ['nullable', 'string', 'max:1000'],
         ])->validate();
+        if (! empty($data['reminder_offsets']) && (empty($data['due_date']) || empty($data['due_time']))) {
+            throw ValidationException::withMessages(['reminder_offsets' => 'A reminder needs a task due date and time.']);
+        }
         if (! empty($data['due_time']) && empty($data['due_date'])) {
             throw ValidationException::withMessages(['due_date' => 'Choose a date for this time.']);
         }
@@ -119,7 +128,8 @@ PROMPT;
             throw ValidationException::withMessages(['action' => 'This request contains fields that are not supported yet.']);
         }
         $fields = match ($data['type']) {
-            'create_task' => ['title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'priority', 'parent_ref', 'milestone_ref'],
+            'create_event' => ['title', 'body', 'calendar_ref', 'event_start', 'event_end', 'location'],
+            'create_task' => ['title', 'body', 'domain_ref', 'project_ref', 'due_date', 'due_time', 'reminder_offsets', 'priority', 'parent_ref', 'milestone_ref'],
             'complete_milestone' => ['project_ref', 'domain_ref', 'milestone_ref'],
             'assign_milestone' => ['task_ref', 'project_ref', 'domain_ref', 'milestone_ref'],
             'create_project' => ['title', 'body', 'domain_ref', 'lifecycle', 'target_date'],
@@ -153,7 +163,7 @@ PROMPT;
                 }
                 $chosenDomain = $correction['domain_id'] ?? null;
                 $chosenProject = $correction['project_id'] ?? null;
-                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision', 'top_task_ids', 'plan_revision', 'parent_task_id', 'parent_revision', 'milestone_id', 'milestone_revision']));
+                $chosen = array_intersect_key($correction ?? [], array_flip(['domain_id', 'project_id', 'task_id', 'person_id', 'work_revision', 'task_revision', 'top_task_ids', 'plan_revision', 'parent_task_id', 'parent_revision', 'milestone_id', 'milestone_revision', 'calendar_id', 'calendar_revision']));
                 if ($correction) {
                     $correction = array_diff_key($correction, $chosen);
                 }
@@ -168,8 +178,11 @@ PROMPT;
                 if ($data['type'] === 'needs_triage' || $data['confidence'] < .6) {
                     throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing it.']);
                 }
+                $this->validateTaskTime($user, $capture, $data, $correction !== null);
                 $before = null;
-                if (app(CaptureStructureActions::class)->handles($data, $chosen)) {
+                if ($data['type'] === 'create_event') {
+                    [$target, $type, $before] = app(CaptureCalendarActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
+                } elseif (app(CaptureStructureActions::class)->handles($data, $chosen)) {
                     [$target, $type, $before] = app(CaptureStructureActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
                 } elseif (in_array($data['type'], CapturePlanActions::TYPES, true)) {
                     [$target, $type, $before] = app(CapturePlanActions::class)->execute($user, $capture, $data, $chosen, $correction !== null);
@@ -188,7 +201,7 @@ PROMPT;
                         'capture_idea' => Note::create($base + ['body' => $data['body'], 'kind' => 'thought']),
                         'create_task' => Task::create($base + [
                             'title' => $data['title'], 'notes' => $data['body'] ?? null, 'domain_id' => $domain, 'project_id' => $project?->id,
-                            'due_date' => $data['due_date'] ?? null, 'due_time' => $data['due_time'] ?? null, 'priority' => $data['priority'] ?? 4, 'source' => 'manual',
+                            'due_date' => $data['due_date'] ?? null, 'due_time' => $data['due_time'] ?? null, 'reminder_offsets' => $data['reminder_offsets'] ?? null, 'priority' => $data['priority'] ?? 4, 'source' => 'manual',
                         ]),
                         'create_project' => Project::create($base + [
                             'name' => $data['title'], 'description' => $data['body'] ?? null, 'domain_id' => $domain, 'slug' => Str::uuid()->toString(),
@@ -256,6 +269,12 @@ PROMPT;
             if ($data['type'] === 'needs_triage' || $data['confidence'] < .6) {
                 throw ValidationException::withMessages(['action' => $data['reason'] ?? 'Review this item before filing.']);
             }
+            $this->validateTaskTime($user, $capture, $data);
+            if ($data['type'] === 'create_event') {
+                app(CaptureCalendarActions::class)->prepare($user, $capture, $data);
+
+                return ['action' => $data, 'outcome' => 'would_queue', 'domain' => null, 'project' => null, 'reason' => 'Saved for the calendar worker; Google confirmation follows.'];
+            }
             if (app(CaptureStructureActions::class)->handles($data)) {
                 app(CaptureStructureActions::class)->prepare($user, $capture, $data);
 
@@ -291,6 +310,19 @@ PROMPT;
         }
     }
 
+    private function validateTaskTime(User $user, Capture $capture, array $data, bool $reviewed = false): void
+    {
+        if ($data['type'] !== 'create_task' || empty($data['due_time'])) {
+            return;
+        }
+        $dates = app(LocalDate::class);
+        $timezone = $dates->timezone($user);
+        if (! $reviewed && $timezone !== $capture->timezone) {
+            throw ValidationException::withMessages(['due_time' => 'Your timezone changed after recording. Review the task deadline before filing.']);
+        }
+        $dates->localTime($data['due_date'].'T'.$data['due_time'], $timezone);
+    }
+
     private function candidates(CaptureItem $item): array
     {
         $references = app(CaptureReferences::class);
@@ -316,7 +348,11 @@ PROMPT;
             if (! $log || $log->executed_at->lt(now()->subDays(7))) {
                 throw ValidationException::withMessages(['undo' => 'Undo is available for seven days after filing.']);
             }
-            if (in_array($log->action_type, CaptureStructureActions::TYPES, true)) {
+            if ($log->action_type === 'create_event') {
+                if (! app(CaptureCalendarActions::class)->undo($user, $log)) {
+                    return;
+                }
+            } elseif (in_array($log->action_type, CaptureStructureActions::TYPES, true)) {
                 app(CaptureStructureActions::class)->undo($user, $log);
             } elseif (in_array($log->action_type, CapturePlanActions::TYPES, true)) {
                 app(CapturePlanActions::class)->undo($user, $log);

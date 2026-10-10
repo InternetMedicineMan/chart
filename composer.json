@@ -21,6 +21,7 @@
         "laravel/tinker": "^3.0",
         "lemonsqueezy/laravel": "dev-main",
         "livewire/livewire": "^4.3",
+        "minishlink/web-push": "^10.0",
         "resend/resend-php": "^0.13.0",
         "sentry/sentry-laravel": "^4.4",
         "spatie/browsershot": "^5.2",
@@ -45,7 +46,8 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/lmsqueezy/laravel"
+            "url": "https://github.com/lmsqueezy/laravel",
+            "no-api": true
         }
     ],
     "autoload": {

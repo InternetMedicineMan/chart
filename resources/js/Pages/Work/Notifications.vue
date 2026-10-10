@@ -30,7 +30,7 @@ const date = value => new Date(value).toLocaleString('en-US', { timeZone: props.
 <template>
     <div>
         <div class="mb-7 flex flex-wrap items-start justify-between gap-4">
-            <div><p class="work-eyebrow">Your captures, accounted for</p><h2 class="work-heading">What happened.</h2><p class="mt-3 max-w-xl text-sm leading-relaxed text-base-content/60">See what was filed, review what needs a decision, or undo a filing. Your original words stay in Intake.</p></div>
+            <div><p class="work-eyebrow">Captures & reminders</p><h2 class="work-heading">What happened.</h2><p class="mt-3 max-w-xl text-sm leading-relaxed text-base-content/60">See what was filed, review what needs a decision, or undo a filing. Your original words stay in Intake.</p></div>
             <button class="btn btn-sm min-h-11" :disabled="busy || !page.props.unreadNotifications" @click="perform('post', route('notifications.read-all'))">Mark all read</button>
         </div>
         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -50,6 +50,7 @@ const date = value => new Date(value).toLocaleString('en-US', { timeZone: props.
                 <h3 class="mt-3 font-semibold">{{ item.title }}</h3>
                 <p class="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-base-content/65">{{ item.body }}</p>
                 <div class="mt-4 flex flex-wrap items-center gap-2">
+                    <Link v-if="item.target_url" :href="item.target_url" class="btn btn-sm min-h-11">Open reminder</Link>
                     <Link v-if="item.capture_url" :href="item.capture_url" class="btn btn-sm min-h-11" :aria-label="`Open capture: ${item.body || item.title}`">{{ item.type === 'capture_review' ? 'Review capture' : 'Open capture' }}</Link>
                     <button v-if="item.undo_url" class="btn btn-ghost btn-sm min-h-11" :disabled="busy" @click="confirming = item.id"><ArrowUturnLeftIcon class="h-4 w-4" />Undo filing</button>
                     <button v-if="item.status === 'unread'" class="btn btn-ghost btn-sm min-h-11" :disabled="busy" @click="setStatus(item, 'read')">Mark read</button>
@@ -69,6 +70,6 @@ const date = value => new Date(value).toLocaleString('en-US', { timeZone: props.
             <Link :href="route('intake')" class="btn btn-sm mt-5 min-h-11">Go to Intake</Link>
         </section>
         <PageLinks :page="notifications" />
-        <p class="mt-5 text-xs leading-relaxed text-base-content/50">Undo is available for seven days after filing, while the record is unchanged. Dismissing a notification keeps the captured item. These updates appear in Chart; phone and Watch push alerts are not connected yet.</p>
+        <p class="mt-5 text-xs leading-relaxed text-base-content/50">Undo is available for seven days after filing, while the record is unchanged. Dismissing a notification keeps the captured item. Enable browser notifications in Settings to receive reminders on this device.</p>
     </div>
 </template>

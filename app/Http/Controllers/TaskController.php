@@ -6,6 +6,7 @@ use App\Http\Requests\SaveTaskRequest;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\LocalDate;
 use App\Services\TaskCompletion;
 use App\Services\TaskRecurrence;
 use App\Services\TaskStructure;
@@ -38,6 +39,7 @@ class TaskController extends Controller
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $attributes = app(TaskStructure::class)->attributes($request->user(), $this->attributes($request, $setup));
             $attributes = array_replace($attributes, app(TaskRecurrence::class)->attributes($request->user(), $attributes));
+            $this->validateReminderTime($request->user(), $attributes);
             Task::create($attributes + ['user_id' => $request->user()->id, 'source' => 'manual']);
         });
 
@@ -57,11 +59,20 @@ class TaskController extends Controller
             if ($record->completed_at && $record->fill($recurrence)->isDirty()) {
                 throw ValidationException::withMessages(['recurrence_rule' => 'Edit the open next occurrence to change or stop this repeat.']);
             }
+            $this->validateReminderTime($request->user(), array_replace($record->attributesToArray(), $attributes, $recurrence));
             $record->update(array_replace($attributes, $recurrence));
             app(TaskStructure::class)->syncChildren($request->user(), $record);
         });
 
         return back()->with('message', 'Task updated.');
+    }
+
+    private function validateReminderTime(User $user, array $attributes): void
+    {
+        if (! empty($attributes['due_date']) && ! empty($attributes['due_time'])) {
+            $dates = app(LocalDate::class);
+            $dates->localTime(substr($attributes['due_date'], 0, 10).'T'.substr($attributes['due_time'], 0, 5), $attributes['recurrence_timezone'] ?? $dates->timezone($user));
+        }
     }
 
     private function attributes(SaveTaskRequest $request, WorkSetup $setup): array

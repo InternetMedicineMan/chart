@@ -73,7 +73,7 @@ class ParserEvaluation
                 return false;
             }
         }
-        if (($item['type'] ?? '') !== 'needs_triage' && ($item['confidence'] ?? 0) < (in_array($item['type'] ?? '', array_merge(CaptureWorkActions::TYPES, CapturePlanActions::TYPES, CaptureStructureActions::TYPES), true) ? .8 : .6)) {
+        if (($item['type'] ?? '') !== 'needs_triage' && ($item['confidence'] ?? 0) < (in_array($item['type'] ?? '', array_merge(['create_event'], CaptureWorkActions::TYPES, CapturePlanActions::TYPES, CaptureStructureActions::TYPES), true) ? .8 : .6)) {
             return false;
         }
 

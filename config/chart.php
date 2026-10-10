@@ -9,6 +9,13 @@ return [
         'queue_connection' => env('CHART_CALENDAR_QUEUE_CONNECTION', 'calendar_database'),
         'queue' => 'calendar',
     ],
+    'push' => [
+        'public_key' => env('CHART_PUSH_PUBLIC_KEY'),
+        'private_key' => env('CHART_PUSH_PRIVATE_KEY'),
+        'subject' => env('CHART_PUSH_SUBJECT', env('APP_URL')),
+        'connection' => env('CHART_PUSH_QUEUE_CONNECTION', 'database'),
+        'queue' => 'notifications',
+    ],
     'capture' => [
         'enabled' => env('CHART_AI_ENABLED', false),
         'model' => env('CHART_AI_MODEL', 'gpt-6-luna'),

@@ -15,6 +15,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('observations:refresh --scheduled')->everyTenMinutes()->withoutOverlapping();
         $schedule->command('calendar:sync')->everyFifteenMinutes()->withoutOverlapping();
         $schedule->command('calendar:sync --writes-only')->everyMinute()->withoutOverlapping();
+        $schedule->command('reminders:send')->everyMinute()->withoutOverlapping();
         $schedule->command('capture:recover')->everyMinute()->withoutOverlapping();
     }
 

@@ -210,9 +210,9 @@ class ParserEvaluationTest extends TestCase
         $fixtures = app(ParserEvaluation::class)->fixtures();
         $ids = array_column($fixtures['cases'], 'id');
         $this->assertSame($ids, array_values(array_unique($ids)));
-        foreach (['brain_dump', 'five_items', 'someday', 'calendar', 'waiting', 'ambiguous_completion', 'evening_timezone', 'spring_dst', 'fall_dst', 'milestone_complete', 'milestone_assign', 'subtask_create', 'task_milestone_create', 'milestone_ambiguous'] as $id) {
+        foreach (['brain_dump', 'five_items', 'someday', 'calendar', 'waiting', 'ambiguous_completion', 'evening_timezone', 'spring_dst', 'fall_dst', 'milestone_complete', 'milestone_assign', 'subtask_create', 'task_milestone_create', 'milestone_ambiguous', 'timed_reminder', 'event_explicit_end', 'event_invite_unsupported', 'event_repeat_unsupported'] as $id) {
             $this->assertContains($id, $ids);
         }
-        $this->assertCount(56, $fixtures['cases']);
+        $this->assertCount(60, $fixtures['cases']);
     }
 }

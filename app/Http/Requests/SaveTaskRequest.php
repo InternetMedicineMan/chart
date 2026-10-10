@@ -26,6 +26,7 @@ class SaveTaskRequest extends FormRequest
             'domain_id' => ['nullable', 'integer', Rule::exists('domains', 'id')->where('user_id', $this->user()->id)->whereNull('deleted_at')->whereNull('archived_at')],
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $this->user()->id)->whereNull('deleted_at')],
             'priority' => ['sometimes', 'required', 'integer', 'between:1,4'],
+            'reminder_offsets' => ['nullable', 'array', 'max:5'], 'reminder_offsets.*' => ['required', 'integer', 'between:0,10080', 'distinct'],
             'due_date' => ['nullable', 'date_format:Y-m-d'],
             'due_time' => ['nullable', 'date_format:H:i'],
         ];

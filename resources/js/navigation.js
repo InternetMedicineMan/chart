@@ -7,7 +7,7 @@ export const navigation = [
     { label: 'Intake', route: 'intake', icon: InboxArrowDownIcon },
     { label: 'Calendar', route: 'calendar.index', icon: CalendarDaysIcon },
     { label: 'Ideas', route: 'ideas', icon: LightBulbIcon },
-    { label: 'Notifications', route: 'notifications.index', icon: BellIcon, CalendarDaysIcon },
+    { label: 'Notifications', route: 'notifications.index', icon: BellIcon },
     { label: 'Settings', route: 'profile.show', icon: Cog6ToothIcon },
 ];
 

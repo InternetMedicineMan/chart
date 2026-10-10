@@ -25,7 +25,7 @@ class NotificationFeedController extends Controller
 
                 return [
                     'id' => $notification->id, 'type' => $notification->type, 'title' => $notification->title,
-                    'body' => $notification->body, 'status' => $notification->status,
+                    'target_url' => $notification->target_url, 'body' => $notification->body, 'status' => $notification->status,
                     'created_at' => $notification->created_at, 'undone_at' => $notification->undone_at,
                     'capture_url' => $notification->capture_id ? route('captures.show', $notification->capture_id) : null,
                     'undo_url' => $log && $log->status === 'ok' && $log->executed_at->gte(now()->subDays(7))

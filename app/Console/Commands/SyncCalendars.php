@@ -9,6 +9,7 @@ use App\Models\CalendarMutation;
 use App\Models\ConnectedCalendar;
 use App\Services\CalendarSync;
 use App\Services\CalendarWriting;
+use App\Services\CaptureCalendarActions;
 use Illuminate\Console\Command;
 
 class SyncCalendars extends Command
@@ -25,6 +26,7 @@ class SyncCalendars extends Command
             return self::FAILURE;
         }
         $userId = (int) config('chart.owner_id');
+        app(CaptureCalendarActions::class)->reconcile($userId);
         $connection = CalendarConnection::forUser($userId)->where('status', 'connected')->first();
         if (! $connection) {
             return self::SUCCESS;

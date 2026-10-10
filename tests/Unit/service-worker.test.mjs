@@ -50,3 +50,27 @@ test('static build assets are cached, redirects are not', async () => {
     await redirect.send('/build/assets/app-123.js', { destination: 'script' });
     assert.deepEqual(redirect.writes, []);
 });
+
+test('pushes hide private contents and use a stable replacement tag', async () => {
+    const handlers = {}, shown = [];
+    vm.runInNewContext(source, { URL, self: { location: { origin: 'https://chart.test' }, addEventListener: (name, fn) => handlers[name] = fn, registration: { showNotification: async (...args) => shown.push(args) } } });
+    let work;
+    handlers.push({ data: { json: () => ({ id: 12, title: 'Private meeting', body: 'Secret task' }) }, waitUntil: value => work = value });
+    await work;
+    assert.equal(shown[0][0], 'Chart reminder');
+    assert.equal(shown[0][1].tag, 'chart-12');
+    assert.equal(shown[0][1].renotify, false);
+    assert.equal(JSON.stringify(shown).includes('Private meeting'), false);
+    handlers.push({ data: { json: () => { throw new Error('bad payload'); } }, waitUntil: value => work = value });
+    await work;
+    assert.equal(shown[1][1].tag, 'chart-reminder');
+});
+
+test('notification clicks open only the authenticated same-origin feed', async () => {
+    const handlers = {}, opened = [];
+    vm.runInNewContext(source, { URL, self: { location: { origin: 'https://chart.test' }, addEventListener: (name, fn) => handlers[name] = fn, clients: { matchAll: async () => [], openWindow: async url => opened.push(url) } } });
+    let work;
+    handlers.notificationclick({ notification: { close() {}, data: { url: 'https://evil.test' } }, waitUntil: value => work = value });
+    await work;
+    assert.deepEqual(opened, ['https://chart.test/notifications']);
+});

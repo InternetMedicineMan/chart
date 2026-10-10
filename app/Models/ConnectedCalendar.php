@@ -13,7 +13,7 @@ class ConnectedCalendar extends Model
 
     protected $hidden = ['sync_token'];
 
-    protected $casts = ['is_primary' => 'boolean', 'last_synced_at' => 'immutable_datetime', 'last_attempt_at' => 'immutable_datetime', 'revision' => 'integer'];
+    protected $casts = ['reminder_minutes' => 'integer', 'is_primary' => 'boolean', 'last_synced_at' => 'immutable_datetime', 'last_attempt_at' => 'immutable_datetime', 'revision' => 'integer'];
 
     public function connection(): BelongsTo
     {

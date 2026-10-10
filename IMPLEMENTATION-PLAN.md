@@ -6,7 +6,7 @@ Chart should make it easy to get a thought out of your head and see what needs y
 
 ## Current progress
 
-Latest checkpoint: Google Calendar connection, per-calendar Off/Read-only/Two-way access, durable outgoing create/edit/undo, incremental incoming sync, Now/Next and tomorrow’s load are implemented locally. The owner chose an 8 a.m.–5 p.m. focus window. Google Cloud setup and a live round trip remain unverified until the owner supplies credentials privately and connects Google. Reminders/push, voice Calendar actions and real-use acceptance remain ahead; Phase 1 is not complete.
+Latest checkpoint: voice creation of timed Calendar events, task/calendar reminders, opt-in Web Push, and a private JSON data export are implemented. The owner approved a **60-minute default** and the `minishlink/web-push` dependency. The owner reports Google Calendar working in production, both capture/calendar workers configured, and the scheduler running. New notification-worker/VAPID setup, actual phone delivery, Google write/undo round-trip acceptance, backups/restore and the seven-day real-use gate remain open. The owner confirmed backups are **not configured yet**. Phase 1 is not complete.
 
 Foundation implemented October 7, 2026: minimal landing/login, owner-only authentication, required two-factor enrollment, protected package routes, retired signup/marketing/billing/admin routes, persistent responsive shell, and static PWA shell/icons. The owner confirmed successful local and production login and 2FA on October 8.
 
@@ -426,6 +426,74 @@ php artisan calendar:sync
 Live acceptance still required: create a disposable event without guests from Chart, confirm one copy in Google, edit in each direction, test guarded undo, confirm Read-only prevents edits, and check recurring cancellation/all-day display. Monitor the Settings last-sync/error line and saved-change status. Then continue with voice Calendar commands, reminders/push and the remaining Phase 1 acceptance work.
 
 
+## Voice Calendar, reminders and export checkpoint — October 9, 2026
+
+Owner confirmations supersede the pending-setup notes in the earlier Calendar checkpoint: Google OAuth uses **Internal** in the owner’s Google Workspace organization. The shared Wondercide calendar already grants the connected account full write access. Production Calendar is working; the owner configured the capture worker, calendar worker and every-minute scheduler through Forge. Keep only the primary calendar enabled while the external tool mirrors Personal → Wondercide as Busy and Wondercide → Personal, to avoid duplicate display. A future Chart mirror can use the shared calendars through this one connection; cross-calendar mirroring and a public availability page are deferred enhancements, not part of this release.
+
+Implemented:
+
+- Voice/text `create_event` creates a timed event, with the owner-approved **60-minute default** when no end is given. Exact named calendars, a unique writable calendar or a unique writable primary are supported. Ambiguity, past starts, timezone changes, low confidence and invalid/repeated DST times go to review. Invitations, all-day voice creation, recurring events and voice edits/deletions remain triage. Review shows calendar and current Chart timezone. Existing durable Google mutations supply idempotence, retries/conflicts and guarded undo. Capture/feed wording distinguishes queued from Google-confirmed changes; undo remains queued until Google confirms it.
+- Timed tasks default to one reminder at their due time; date-only tasks do not remind. Manual/voice tasks support up to five offsets, 0–10,080 minutes before due; `[]` disables reminders. Repeating tasks and their copied subtasks retain their offsets. New ambiguous/nonexistent local deadlines are rejected. Existing invalid DST deadlines are skipped rather than guessed.
+- Calendar reminders are separately opt-in **per calendar**, initially Off, with 0/5/15/30/60-minute UI choices. They use confirmed timed events on fresh connected calendars. All-day, cancelled, removed, series masters and self-declined events are excluded. Google’s notification settings are unchanged.
+- `reminders:send` runs every minute. Future reminder identities are persisted; changed/inactive/completed/deleted work cancels pending reminders. Each due instant/offset creates at most one feed record. Already planned reminders recover up to one day late after an outage; older ones expire. Previously unplanned deadlines older than five minutes are not backfilled, preventing an initial historical alert flood. An outage before the first planning run can therefore miss a reminder; the scheduler must stay supervised.
+- Opt-in Web Push via maintained `minishlink/web-push` 10.1.0. Settings → Reminders manages up to ten devices, offers an explicit test, and supports per-device revocation. Credentials/endpoints are encrypted and hidden; only supported HTTPS browser-provider endpoints are accepted. The notification body is generic, and clicking opens the authenticated feed. Logging out revokes the subscription registered in that session. Provider expiry removes subscriptions; durable jobs recover dispatch/network failures with bounded retries. A stable service-worker tag suppresses routine duplicate visible alerts. A lost provider response cannot offer a strict exactly-once network guarantee.
+- Settings exports owned records (including soft-deleted work), original captures, plans, observations and cached event details as streamed JSON. Login/owner/2FA and no-store boundaries apply. Credentials, access tokens and browser subscriptions are excluded. This is a portability export, not a database restoration image. No Library media records exist yet; media ZIP export remains with Phase 4.
+
+Dependency installation added only Web Push and its two new transitive packages; existing versions stayed locked. The existing public LemonSqueezy VCS repository now uses Git (`no-api`) because its GitHub API authentication failed. Composer audit reported 63 advisories across 23 **existing** packages, none for the three new packages. Dependency remediation is a separate launch-hardening task; do not silently upgrade the entire starter while deploying these features.
+
+Validation: **411 PHP tests passed (3,145 assertions)** with 17 existing disabled-feature skips; six service-worker tests and six new live synthetic parser cases passed. Live parser report: `storage/app/private/parser-evals/20261010-032432-92d71b2b-ace2-4686-a468-987beb5b0947.json` (ignored/private). Client/SSR builds, Pint, route-cache compilation and scheduler listing passed. An isolated SQLite account passed 390px browser checks for device settings, per-calendar reminder selection, voice event review/queue/undo, custom task-reminder saving and JSON download, with no page errors or horizontal overflow. No live Google writes or real push sends occurred. The production data was not used in browser tests; the additive migration also passed on the local Herd MySQL database. No local queue/scheduler workers were running at the end of the checkpoint; production worker status is owner-reported. The preview server was stopped after verification.
+
+### Deploy this checkpoint through Forge
+
+No push or production deployment was performed by the agent. Use the existing source/asset deployment flow, including Composer install from the lock file and both Vite builds. After code/dependencies/assets arrive:
+
+```bash
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan queue:restart
+```
+
+Generate the VAPID key pair **once** in a private terminal:
+
+```bash
+php artisan chart:push-keys
+```
+
+Save both output values in Forge’s private Environment (`CHART_PUSH_PUBLIC_KEY` and `CHART_PUSH_PRIVATE_KEY`), plus:
+
+```dotenv
+CHART_PUSH_SUBJECT=https://chart.internetmedicineman.com
+CHART_PUSH_QUEUE_CONNECTION=database
+```
+
+Keep these keys stable once devices subscribe. Keep APP_KEY unchanged. Refresh configuration and restart workers after saving the environment. Add a **third worker** under **site → Processes → Add background process → Queue worker**: connection `database`, queue `notifications`, one process, sleep 1, tries 1, timeout 60. Command equivalent:
+
+```bash
+php artisan queue:work database --queue=notifications --sleep=1 --tries=1 --timeout=60
+```
+
+The job timeout is 45 seconds, below the worker timeout and database retry_after (90 seconds). Keep both existing workers and the existing scheduler; no second scheduler/cron entry is needed. Validate scheduler registration and seed future reminders:
+
+```bash
+php artisan schedule:list
+php artisan reminders:send
+```
+
+Then, on the installed iPhone Home Screen app, open Settings → Reminders → Manage notifications, enable this device, and use Send test. Test a task a few minutes ahead, including one custom offset. If enabling remains stuck, reload the installed app to activate its updated service worker, then retry. iPhone push needs a supported iOS version, installation and a user gesture; browser/device delivery remains a real-device acceptance check. [WebKit Home Screen push](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).
+
+### Backups and restore acceptance (owner manages production)
+
+The owner confirmed backups are not configured and there is no existing storage bucket. **Recommendation: Amazon S3 Standard**, a dedicated private general-purpose bucket in `us-east-2` (Ohio) or another suitable US region. S3 has usage-based billing with no minimum charge, appropriate for this small database; actual charges depend on size and requests. [S3 pricing](https://aws.amazon.com/s3/pricing/). Keep Block Public Access enabled and default SSE-S3 encryption; S3 encrypts new uploads by default. [S3 encryption](https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-bucket-encryption.html). Create a dedicated IAM credential scoped to this bucket with ListBucket and GetObject/PutObject/DeleteObject, then add it under **Forge organization settings → Storage providers → Add provider → Amazon S3**. Use a `chart/database` directory. Keys go privately into Forge, not Chart or chat. [Forge storage setup and permissions](https://laravel.com/forge/docs/storage-providers).
+
+Forge’s built-in database backups require its Business plan and a configured off-server storage provider. Configure a private, encrypted bucket in that provider and a nightly backup of Chart’s actual database, retain at least 14 daily copies, and enable failed-backup email notifications. Run one backup immediately and inspect success/output. These retention and encryption settings are Chart’s launch requirements/recommendations; verify encryption in the storage provider, since a Forge schedule alone does not establish it. [Forge backup configuration](https://laravel.com/forge/docs/resources/database-backups).
+
+Keep a separately protected copy of production APP_KEY and required environment secrets in a password manager; encrypted Google/push credentials and 2FA cannot be recovered without the original APP_KEY. Do not put secrets in the repository or chat.
+
+Restore rehearsal: download one successful archive and restore it into a **separate test database**, not production. Use an isolated clone of the same release and the original key, with no scheduler/workers, outbound network blocked, AI disabled, no real notification subscriptions dispatched, and no Google sync. Check owner login/2FA, task/project/capture counts, representative original capture text, recurring checklist state, and JSON export. Record backup timestamp, counts and result here, then securely remove the rehearsal copy when finished. Repeat quarterly. Forge’s built-in Restore button restores to the source database; use a database client for the isolated rehearsal. [Forge restore behavior](https://laravel.com/forge/docs/resources/database-backups#restoring-backups).
+
+Still required before Phase 1 acceptance: production push test and timed delivery, disposable Google create/edit/undo round trip, live capture-worker smoke test, iPhone/Watch offline/connection checks, verified backup/restore, existing dependency-advisory remediation, and **seven days of owner-confirmed real use**. No Phase 2 work starts before that gate.
+
 ## Initial audit
 
 | Area | Finding | Treatment |
@@ -556,11 +624,12 @@ Acceptance: a quiet project surfaces automatically; the same project has the sam
 
 ### 6. Calendar, reminders and launch readiness
 
-- [x] Implement authenticated Google connection, encrypted tokens and per-calendar Off/Read-only/Two-way selection. Owner OAuth setup/live acceptance is pending.
+- [x] Implement authenticated Google connection, encrypted tokens and per-calendar Off/Read-only/Two-way selection. Owner reports OAuth configured and incoming sync working; write/undo round-trip acceptance is still open.
 - [x] Implement initial/incremental sync, expired-token recovery, cancellations, recurring instances, durable outbound writes and guarded undo. Mocked API tests pass; live Google acceptance remains pending.
 - [x] Show Now/Next and tomorrow’s booked/unbooked load (8 a.m.–5 p.m., owner timezone).
-- [ ] Add voice Calendar actions and notification feed/Web Push and/or Pushover reminders.
-- [ ] Configure production HTTPS, scheduler, workers, private storage, encrypted backups and a restore procedure. Implement scoped data export.
+- [x] Add voice timed-event creation, task/calendar reminders, notification feed and opt-in Web Push. Production push/device acceptance remains open.
+- [x] Implement owner-only JSON data export in Settings. Media ZIP export belongs with the later media records.
+- [ ] Finish production readiness: HTTPS/login and capture/calendar workers/scheduler are owner-confirmed; notification worker, encrypted backups, restore rehearsal and later private media storage remain open.
 - [ ] Run the parser fixtures and scenario checks, install on iPhone, test watch capture on available connection types, and record real-device results separately from automated tests.
 
 Acceptance: Calendar changes round-trip without duplicates; read-only calendars cannot be written; reminders fire once; expired sessions preserve unsent capture; logout cannot reveal private data from the service-worker cache; restore and export succeed. Phase 1 is complete only when the full day can be run from Chart, not when the shell looks finished.

@@ -17,7 +17,7 @@ class ResolveCaptureItemRequest extends FormRequest
     {
         return [
             'type' => ['required', Rule::in(array_diff(array_keys(CaptureActions::DEFINITIONS), ['needs_triage']))],
-            'title' => ['nullable', 'required_if:type,create_task,create_project', 'string', 'max:100'],
+            'title' => ['nullable', 'required_if:type,create_task,create_project,create_event', 'string', 'max:100'],
             'body' => ['nullable', 'required_if:type,capture_idea,log_activity,set_tomorrow_focus', 'string', 'max:20000'],
             'domain_ref' => ['nullable', 'string', 'max:100'], 'project_ref' => ['nullable', 'string', 'max:100'],
             'domain_id' => ['nullable', 'integer', Rule::exists('domains', 'id')->where('user_id', $this->user()->id)->whereNull('deleted_at')->whereNull('archived_at')],
@@ -38,7 +38,12 @@ class ResolveCaptureItemRequest extends FormRequest
             'task_ref' => ['nullable', 'string', 'max:255'], 'person_ref' => ['nullable', 'string', 'max:100'],
             'expected_by' => ['nullable', 'date_format:Y-m-d'], 'minutes' => ['nullable', 'integer', 'between:1,1440'],
             'activity_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-02'], 'activity_time' => ['nullable', 'date_format:H:i'],
+            'reminder_offsets' => ['nullable', 'array', 'max:5'], 'reminder_offsets.*' => ['required', 'integer', 'between:0,10080', 'distinct'],
             'due_date' => ['nullable', 'date_format:Y-m-d'], 'due_time' => ['nullable', 'date_format:H:i'],
+            'calendar_id' => ['nullable', 'integer', Rule::exists('connected_calendars', 'id')->where('user_id', $this->user()->id)],
+            'calendar_revision' => ['nullable', 'integer', 'min:0'],
+            'calendar_ref' => ['nullable', 'string', 'max:255'], 'location' => ['nullable', 'string', 'max:1000'],
+            'event_start' => ['nullable', 'required_if:type,create_event', 'date_format:Y-m-d\TH:i'], 'event_end' => ['nullable', 'date_format:Y-m-d\TH:i'],
             'priority' => ['nullable', 'integer', 'between:1,4'],
             'target_date' => ['nullable', 'date_format:Y-m-d'], 'lifecycle' => ['nullable', Rule::in(['active', 'someday'])],
         ];

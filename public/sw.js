@@ -34,3 +34,22 @@ self.addEventListener('fetch', event => {
         return response;
     }));
 });
+
+
+self.addEventListener('push', event => {
+    let id = 'reminder';
+    try { const data = event.data?.json(); if (Number.isSafeInteger(data?.id)) id = String(data.id); } catch { /* Keep the generic notification. */ }
+    event.waitUntil(self.registration.showNotification('Chart reminder', {
+        body: 'Open Chart to view your notification.', icon: '/icons/chart-192.png', badge: '/icons/chart-192.png',
+        tag: `chart-${id}`, renotify: false, data: { url: '/notifications' },
+    }));
+});
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async windows => {
+        const url = new URL('/notifications', self.location.origin).href;
+        const window = windows.find(client => new URL(client.url).origin === self.location.origin);
+        if (window) { await window.navigate(url); return window.focus(); }
+        return self.clients.openWindow(url);
+    }));
+});

@@ -119,7 +119,8 @@ class CaptureService
     {
         $capture->refresh();
         $statuses = $capture->items()->forUser($capture->user_id)->pluck('status');
-        $filed = $statuses->filter(fn ($status) => $status === 'executed')->count();
+        $calendarCount = $capture->items()->forUser($capture->user_id)->where('status', 'executed')->where('target_type', 'calendar_mutation')->count();
+        $filed = $statuses->filter(fn ($status) => $status === 'executed')->count() - $calendarCount;
         $review = $statuses->diff(['executed', 'undone'])->count();
         $message = 'Saved. Sorting it now.';
         if ($capture->fallback_task_id && ! $capture->parsed && ! in_array($capture->status, ['received', 'processing'], true)) {
@@ -127,7 +128,7 @@ class CaptureService
             $message = $willRetry ? 'Saved to Inbox. Sorting will retry automatically.' : 'Saved to Inbox. Automatic sorting needs attention.';
         }
         if ($statuses->isNotEmpty() && ! $statuses->contains('pending')) {
-            $message = "Saved. {$filed} filed".($review ? "; {$review} need review." : '.');
+            $message = "Saved. {$filed} filed".($calendarCount ? "; {$calendarCount} calendar requests saved—check Calendar for confirmation" : '').($review ? "; {$review} need review." : '.');
         }
 
         return ['capture_id' => $capture->id, 'status' => $capture->status, 'item_count' => $statuses->count(), 'spoken_confirmation' => $message];

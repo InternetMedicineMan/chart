@@ -133,6 +133,12 @@
           "name": "Church platform"
         }
       }
+    ],
+    "calendars": [
+      {
+        "name": "Personal",
+        "is_primary": true
+      }
     ]
   },
   "cases": [
@@ -158,7 +164,7 @@
           "type": "needs_triage"
         }
       ],
-      "capability": "deferred: reminders and ambiguous time"
+      "capability": "ambiguous AM/PM still requires review"
     },
     {
       "id": "waiting",
@@ -253,10 +259,13 @@
       "text": "Schedule lunch with Dan next Tuesday at noon",
       "expected": [
         {
-          "type": "needs_triage"
+          "type": "create_event",
+          "title_contains": "Dan",
+          "event_start": "2026-10-13T12:00",
+          "event_end": null
         }
       ],
-      "capability": "deferred: Calendar"
+      "capability": "timed calendar creation"
     },
     {
       "id": "ambiguous_completion",
@@ -552,11 +561,12 @@
           "title_contains": "paper"
         },
         {
-          "type": "needs_triage",
-          "excerpt_contains": "Dan"
+          "type": "create_event",
+          "excerpt_contains": "Dan",
+          "event_start": "2026-10-09T12:00"
         }
       ],
-      "capability": "mixed: Calendar deferred",
+      "capability": "mixed task and calendar creation",
       "context": {
         "mode": "dump"
       }
@@ -891,6 +901,55 @@
         }
       ],
       "capability": "implemented: reviewed milestone and subtask actions"
+    },
+    {
+      "id": "timed_reminder",
+      "text": "Remind me Friday at 3 p.m. to send Acme the invoice. Alert me 15 minutes before.",
+      "expected": [
+        {
+          "type": "create_task",
+          "title_contains": "invoice",
+          "due_date": "2026-10-09",
+          "due_time": "15:00",
+          "reminder_offsets": [
+            15
+          ]
+        }
+      ],
+      "capability": "task reminders"
+    },
+    {
+      "id": "event_explicit_end",
+      "text": "Schedule lunch tomorrow from noon to 1:30 p.m. on Personal.",
+      "expected": [
+        {
+          "type": "create_event",
+          "event_start": "2026-10-09T12:00",
+          "event_end": "2026-10-09T13:30",
+          "calendar_ref": "Personal"
+        }
+      ],
+      "capability": "timed calendar creation"
+    },
+    {
+      "id": "event_invite_unsupported",
+      "text": "Schedule lunch tomorrow at noon and invite dan@example.test.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "invitations require review"
+    },
+    {
+      "id": "event_repeat_unsupported",
+      "text": "Schedule a recurring lunch every Tuesday at noon.",
+      "expected": [
+        {
+          "type": "needs_triage"
+        }
+      ],
+      "capability": "voice recurrence requires review"
     }
   ]
 }

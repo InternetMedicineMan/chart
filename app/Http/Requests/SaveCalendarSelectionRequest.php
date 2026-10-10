@@ -14,7 +14,7 @@ class SaveCalendarSelectionRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['mode' => ['required', Rule::in(['off', 'read_only', 'two_way'])], 'revision' => ['required', 'integer', 'min:0']];
+        return ['reminder_minutes' => ['nullable', 'integer', 'between:0,10080'], 'mode' => ['required', Rule::in(['off', 'read_only', 'two_way'])], 'revision' => ['required', 'integer', 'min:0']];
     }
 
     public function messages(): array

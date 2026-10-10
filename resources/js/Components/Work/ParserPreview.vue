@@ -7,7 +7,7 @@ const form = useForm({ text: '' });
 const busy = ref(false);
 const result = ref(null);
 const error = ref('');
-const labels = { create_task: 'Task', capture_idea: 'Idea', create_project: 'Project', needs_triage: 'Needs a decision' };
+const labels = { create_event: 'Calendar event', create_task: 'Task', capture_idea: 'Idea', create_project: 'Project', needs_triage: 'Needs a decision' };
 const preview = async () => {
     busy.value = true;
     result.value = null;
@@ -40,7 +40,7 @@ const preview = async () => {
         <div v-if="result" aria-live="polite" class="mt-6 border-t border-base-200 pt-5">
             <p class="text-sm font-semibold">Proposed result — nothing filed</p>
             <article v-for="(item, index) in result.items" :key="index" class="mt-3 rounded-xl bg-base-200/60 p-4">
-                <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold">{{ labels[item.action.type] || 'Needs review' }}</span><span class="text-xs" :class="item.outcome === 'needs_triage' ? 'text-warning' : 'text-base-content/50'">{{ item.outcome === 'needs_triage' ? 'Would need a decision' : item.outcome === 'would_file_with_review' ? 'Would file · Check this' : 'Would file' }}</span></div>
+                <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold">{{ labels[item.action.type] || 'Needs review' }}</span><span class="text-xs" :class="item.outcome === 'needs_triage' ? 'text-warning' : 'text-base-content/50'">{{ item.outcome === 'needs_triage' ? 'Would need a decision' : item.outcome === 'would_file_with_review' ? 'Would file · Check this' : item.outcome === 'would_queue' ? 'Would queue for Google' : 'Would file' }}</span></div>
                 <p class="mt-2 whitespace-pre-wrap break-words text-sm">{{ item.action.title || item.action.body || item.action.excerpt || form.text }}</p>
                 <p v-if="item.domain || item.project" class="mt-2 text-xs text-base-content/60">{{ [item.domain, item.project].filter(Boolean).join(' → ') }}</p>
                 <p v-if="item.action.due_date" class="mt-2 text-xs text-base-content/60">Due {{ item.action.due_date }} {{ item.action.due_time || '' }}</p>
