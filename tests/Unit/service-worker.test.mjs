@@ -74,3 +74,15 @@ test('notification clicks open only the authenticated same-origin feed', async (
     await work;
     assert.deepEqual(opened, ['https://chart.test/notifications']);
 });
+
+test('declarative messages display one generic notification in the legacy worker', async () => {
+    const handlers = {}, shown = [];
+    vm.runInNewContext(source, { URL, self: { location: { origin: 'https://chart.test' }, addEventListener: (name, fn) => handlers[name] = fn, registration: { showNotification: async (...args) => shown.push(args) } } });
+    let work;
+    handlers.push({ data: { json: () => ({ id: 42, web_push: 8030, notification: { title: 'Chart reminder', body: 'Open Chart to view your notification.', navigate: 'https://chart.test/notifications', tag: 'chart-42', silent: false } }) }, waitUntil: value => work = value });
+    await work;
+    assert.equal(shown.length, 1);
+    assert.equal(shown[0][0], 'Chart reminder');
+    assert.equal(shown[0][1].tag, 'chart-42');
+    assert.equal(shown[0][1].data.url, '/notifications');
+});
