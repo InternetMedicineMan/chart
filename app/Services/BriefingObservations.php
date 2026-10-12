@@ -132,7 +132,7 @@ class BriefingObservations
             }
         }
         $cutoff = $today->subDays(30)->endOfDay()->utc();
-        $ideas = Note::forUser($user)->where('kind', 'thought')->where(fn ($q) => $q->where('reviewed_at', '<=', $cutoff)->orWhere(fn ($q) => $q->whereNull('reviewed_at')->where('created_at', '<=', $cutoff)))->count();
+        $ideas = Note::forUser($user)->where('kind', 'thought')->whereNull('archived_at')->where(fn ($q) => $q->where('reviewed_at', '<=', $cutoff)->orWhere(fn ($q) => $q->whereNull('reviewed_at')->where('created_at', '<=', $cutoff)))->count();
         if ($ideas >= 3) {
             $add('ideas_aging', 'ideas', $user->id, "{$ideas} ideas to revisit", 'Not reviewed for at least 30 days', 25, route('ideas', [], false), false, $ideas);
         }

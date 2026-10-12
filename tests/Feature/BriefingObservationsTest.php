@@ -190,3 +190,17 @@ it('rolls the additive observation migration back and reapplies it', function ()
     $this->observations->refresh($this->owner, true);
     expect(Observation::count())->toBe(1);
 });
+
+it('stops suggesting archived ideas and includes them again when restored', function () {
+    foreach (range(1, 3) as $number) {
+        $idea = Note::create(['user_id' => $this->owner->id, 'kind' => 'thought', 'body' => 'Idea '.$number, 'created_at' => now()->subDays(40)]);
+    }
+    $this->observations->refresh($this->owner, true);
+    $observation = Observation::where('rule_type', 'ideas_aging')->firstOrFail();
+    $this->patch(route('ideas.archive', $idea))->assertSessionHasNoErrors();
+    $this->observations->refresh($this->owner);
+    expect($observation->fresh()->resolved_at)->not->toBeNull();
+    $this->post(route('ideas.restore', $idea))->assertSessionHasNoErrors();
+    $this->observations->refresh($this->owner, true);
+    expect($observation->fresh()->resolved_at)->toBeNull();
+});

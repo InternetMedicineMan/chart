@@ -103,7 +103,7 @@ class CaptureService
             if ($statuses->isEmpty()) {
                 return;
             }
-            $unresolved = $statuses->diff(['executed', 'undone'])->count();
+            $unresolved = $statuses->diff(['executed', 'undone', 'dismissed'])->count();
             if ($statuses->contains('pending')) {
                 $capture->update(['status' => 'parsed']);
                 app(CaptureNotifications::class)->syncCapture($capture);
@@ -121,14 +121,15 @@ class CaptureService
         $statuses = $capture->items()->forUser($capture->user_id)->pluck('status');
         $calendarCount = $capture->items()->forUser($capture->user_id)->where('status', 'executed')->where('target_type', 'calendar_mutation')->count();
         $filed = $statuses->filter(fn ($status) => $status === 'executed')->count() - $calendarCount;
-        $review = $statuses->diff(['executed', 'undone'])->count();
+        $review = $statuses->diff(['executed', 'undone', 'dismissed'])->count();
+        $dismissed = $statuses->filter(fn ($status) => $status === 'dismissed')->count();
         $message = 'Saved. Sorting it now.';
         if ($capture->fallback_task_id && ! $capture->parsed && ! in_array($capture->status, ['received', 'processing'], true)) {
             $willRetry = $capture->status === 'failed' && $capture->attempts < 3 && $this->enabled();
             $message = $willRetry ? 'Saved to Inbox. Sorting will retry automatically.' : 'Saved to Inbox. Automatic sorting needs attention.';
         }
         if ($statuses->isNotEmpty() && ! $statuses->contains('pending')) {
-            $message = "Saved. {$filed} filed".($calendarCount ? "; {$calendarCount} calendar requests saved—check Calendar for confirmation" : '').($review ? "; {$review} need review." : '.');
+            $message = "Saved. {$filed} filed".($dismissed ? "; {$dismissed} marked no action needed" : '').($calendarCount ? "; {$calendarCount} calendar requests saved—check Calendar for confirmation" : '').($review ? "; {$review} need review." : '.');
         }
 
         return ['capture_id' => $capture->id, 'status' => $capture->status, 'item_count' => $statuses->count(), 'spoken_confirmation' => $message];

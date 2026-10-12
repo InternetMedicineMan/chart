@@ -44,7 +44,7 @@ class CaptureNotifications
                 $notification->update([
                     'type' => $sorting ? 'capture_sorting' : 'capture_resolved',
                     'title' => $sorting ? 'Capture sorting again' : 'Capture review resolved',
-                    'body' => $sorting ? 'Your words are saved. Sorting is in progress.' : 'Every item has been filed or its filing undone. Your original words are still in Intake.',
+                    'body' => $sorting ? 'Your words are saved. Sorting is in progress.' : 'Every item has been filed, marked no action needed, or its filing undone. Your original words are still in Intake.',
                     'status' => $notification->status === 'dismissed' ? 'dismissed' : 'read',
                 ]);
             }

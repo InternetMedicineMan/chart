@@ -11,5 +11,5 @@ class Note extends Model
 {
     use OwnedByUser, SoftDeletes;
 
-    protected $casts = ['kind' => NoteKind::class, 'needs_review' => 'boolean', 'reviewed_at' => 'datetime'];
+    protected $casts = ['kind' => NoteKind::class, 'needs_review' => 'boolean', 'reviewed_at' => 'datetime', 'archived_at' => 'datetime'];
 }

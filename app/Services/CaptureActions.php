@@ -158,7 +158,7 @@ PROMPT;
                 $user = User::whereKey($item->user_id)->lockForUpdate()->firstOrFail();
                 $capture = Capture::forUser($item->user_id)->lockForUpdate()->findOrFail($item->capture_id);
                 $item = CaptureItem::forUser($capture->user_id)->lockForUpdate()->findOrFail($item->id);
-                if (in_array($item->status, ['executed', 'undone'], true)) {
+                if (in_array($item->status, ['executed', 'undone', 'dismissed'], true)) {
                     return;
                 }
                 $chosenDomain = $correction['domain_id'] ?? null;
@@ -222,14 +222,14 @@ PROMPT;
             });
         } catch (ValidationException $exception) {
             $item->refresh();
-            if (! in_array($item->status, ['executed', 'undone'], true)) {
-                CaptureItem::forUser($item->user_id)->whereKey($item->id)->whereNotIn('status', ['executed', 'undone'])
+            if (! in_array($item->status, ['executed', 'undone', 'dismissed'], true)) {
+                CaptureItem::forUser($item->user_id)->whereKey($item->id)->whereNotIn('status', ['executed', 'undone', 'dismissed'])
                     ->update(['status' => 'needs_triage', 'error' => Str::limit(collect($exception->errors())->flatten()->first(), 250), 'candidates' => $this->candidates($item)]);
             }
         } catch (Throwable $exception) {
             $item->refresh();
-            if (! in_array($item->status, ['executed', 'undone'], true)) {
-                CaptureItem::forUser($item->user_id)->whereKey($item->id)->whereNotIn('status', ['executed', 'undone'])
+            if (! in_array($item->status, ['executed', 'undone', 'dismissed'], true)) {
+                CaptureItem::forUser($item->user_id)->whereKey($item->id)->whereNotIn('status', ['executed', 'undone', 'dismissed'])
                     ->update(['status' => 'failed', 'error' => 'This item could not be filed. Your words are safe; try again.']);
             }
         }
@@ -335,6 +335,24 @@ PROMPT;
         ];
     }
 
+    public function dismiss(CaptureItem $item, bool $dismissed = true): void
+    {
+        DB::transaction(function () use ($item, $dismissed) {
+            User::whereKey($item->user_id)->lockForUpdate()->firstOrFail();
+            $capture = Capture::forUser($item->user_id)->lockForUpdate()->findOrFail($item->capture_id);
+            $item = CaptureItem::forUser($item->user_id)->lockForUpdate()->findOrFail($item->id);
+            if (! in_array($item->status, ['needs_triage', 'failed', 'dismissed'], true)) {
+                throw ValidationException::withMessages(['item' => 'Only items waiting for a decision can be dismissed.']);
+            }
+            if ($dismissed && $item->status !== 'dismissed') {
+                $item->update(['status' => 'dismissed']);
+            } elseif (! $dismissed && $item->status === 'dismissed') {
+                $item->update(['status' => 'needs_triage']);
+            }
+            app(CaptureService::class)->summarize($capture);
+        });
+    }
+
     public function undo(CaptureItem $item): void
     {
         DB::transaction(function () use ($item) {
@@ -363,7 +381,12 @@ PROMPT;
                     'task' => Task::class, 'idea' => Note::class, 'project' => Project::class
                 };
                 $target = $class::withTrashed()->forUser($item->user_id)->lockForUpdate()->find($log->target_id);
-                if (! $target || $target->getRawOriginal() != $log->after_snapshot || ($target instanceof Project && ($target->tasks()->withTrashed()->exists() || $target->milestones()->exists())) || ($target instanceof Task && ($target->subtasks()->withTrashed()->exists() || DailyPlan::forUser($user)->whereJsonContains('top_task_ids', $target->id)->exists()))) {
+                $snapshot = $log->after_snapshot;
+                if ($target instanceof Note) {
+                    // Captures made before idea archiving did not include this column.
+                    $snapshot += ['archived_at' => null];
+                }
+                if (! $target || $target->getRawOriginal() != $snapshot || ($target instanceof Project && ($target->tasks()->withTrashed()->exists() || $target->milestones()->exists())) || ($target instanceof Task && ($target->subtasks()->withTrashed()->exists() || DailyPlan::forUser($user)->whereJsonContains('top_task_ids', $target->id)->exists()))) {
                     throw ValidationException::withMessages(['undo' => 'This record has changed since capture. Edit it directly so newer work is preserved.']);
                 }
                 $target->delete();

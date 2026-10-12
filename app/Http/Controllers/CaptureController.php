@@ -90,6 +90,20 @@ class CaptureController extends Controller
         return back()->with('message', $record->fresh()->status === 'executed' ? ($record->fresh()->action_type === 'create_event' ? 'Calendar event queued. Waiting for Google confirmation.' : 'Item filed.') : 'Item still needs review.');
     }
 
+    public function dismiss(Request $request, int $item, CaptureActions $actions): RedirectResponse
+    {
+        $actions->dismiss(CaptureItem::forUser($request->user())->findOrFail($item));
+
+        return back()->with('message', 'No action needed. Your original words are still here.');
+    }
+
+    public function reopen(Request $request, int $item, CaptureActions $actions): RedirectResponse
+    {
+        $actions->dismiss(CaptureItem::forUser($request->user())->findOrFail($item), false);
+
+        return back()->with('message', 'Item reopened for review.');
+    }
+
     public function undo(Request $request, int $item, CaptureActions $actions, CaptureService $service): RedirectResponse
     {
         $record = CaptureItem::forUser($request->user())->findOrFail($item);

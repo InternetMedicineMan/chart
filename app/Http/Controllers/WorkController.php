@@ -42,12 +42,12 @@ class WorkController extends Controller
             'observations' => app(BriefingObservations::class)->briefing($user),
             'pendingCaptureCount' => Capture::forUser($user)->whereIn('status', ['received', 'processing', 'parsed'])->count(),
             'reviewCaptureCount' => Capture::forUser($user)->whereIn('status', ['needs_triage', 'partially_executed', 'failed'])->count(),
-            'newIdeaCount' => Note::forUser($user)->where('kind', 'thought')->where('created_at', '>=', CarbonImmutable::now($dates->timezone($user))->startOfWeek()->utc())->count(),
+            'newIdeaCount' => Note::forUser($user)->where('kind', 'thought')->whereNull('archived_at')->where('created_at', '>=', CarbonImmutable::now($dates->timezone($user))->startOfWeek()->utc())->count(),
             'waiting' => $waits->briefing($user),
             'dueCount' => (clone $due)->count(),
             'dueTasks' => $due->with(['project', 'domain'])->orderBy('due_date')->orderBy('priority')->orderBy('id')->limit(7)->get(),
             'inboxCount' => Task::forUser($user)->whereNull('completed_at')->whereHas('domain', fn (Builder $query) => $query->forUser($user)->where('is_inbox', true))->count(),
-            'ideaCount' => Note::forUser($user)->where('kind', 'thought')->count(),
+            'ideaCount' => Note::forUser($user)->where('kind', 'thought')->whereNull('archived_at')->count(),
             'projectCount' => Project::forUser($user)->where('lifecycle', 'active')->count(),
             'oldCaptureCount' => Capture::forUser($user)->whereIn('status', ['needs_triage', 'partially_executed', 'failed'])->where('created_at', '<=', now()->subHours(48))->count(),
         ]);
@@ -162,9 +162,22 @@ class WorkController extends Controller
 
     public function ideas(Request $request, WorkOptions $options): Response
     {
+        $filters = $request->validate(['status' => ['nullable', Rule::in(['active', 'archived'])]]);
+        $status = $filters['status'] ?? 'active';
+        $workOptions = $options->forUser($request->user());
+        $dates = app(LocalDate::class);
+
         return Inertia::render('Work/Ideas', [
-            'options' => $options->forUser($request->user()),
-            'ideas' => Note::forUser($request->user())->where('kind', 'thought')->latest('id')->paginate(20)->withQueryString(),
+            'options' => $workOptions,
+            'filters' => ['status' => $status],
+            'ideas' => Note::forUser($request->user())->where('kind', 'thought')
+                ->when($status === 'archived', fn ($query) => $query->whereNotNull('archived_at'), fn ($query) => $query->whereNull('archived_at'))
+                ->latest('id')->paginate(20)->withQueryString()
+                ->through(function (Note $idea) use ($dates, $workOptions) {
+                    $idea->setAttribute('reviewed_today', $idea->reviewed_at && $dates->date($idea->reviewed_at, $workOptions['timezone']) === $workOptions['today']);
+
+                    return $idea;
+                }),
             'someday' => Project::forUser($request->user())->where('lifecycle', 'someday')->with('domain')->latest('id')->paginate(12, ['*'], 'someday_page')->withQueryString(),
         ]);
     }

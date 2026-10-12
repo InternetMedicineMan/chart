@@ -8,6 +8,7 @@ use App\Models\Capture;
 use App\Models\CaptureAttempt;
 use App\Models\CaptureItem;
 use App\Models\Domain;
+use App\Models\FeedNotification;
 use App\Models\Note;
 use App\Models\Project;
 use App\Models\Task;
@@ -240,6 +241,90 @@ class CapturePipelineTest extends TestCase
         $this->assertSame($this->owner->id, Task::first()->user_id);
         $this->assertNull(Task::first()->completed_at);
         $this->assertSame('executed', $capture->fresh()->status);
+    }
+
+    public function test_dismissal_clears_review_without_creating_work_and_can_be_reopened(): void
+    {
+        $capture = $this->receive();
+        $this->respond([$this->action(overrides: ['confidence' => .4])]);
+        $this->process($capture);
+        $item = CaptureItem::firstOrFail();
+        $this->post(route('capture-items.dismiss', $item))->assertSessionHasNoErrors();
+        $this->post(route('capture-items.dismiss', $item))->assertSessionHasNoErrors();
+        $this->assertSame('dismissed', $item->fresh()->status);
+        $this->assertSame('executed', $capture->fresh()->status);
+        $this->assertSame('Call the plumber', $capture->fresh()->raw_text);
+        $this->assertSame('Call the plumber', $item->fresh()->excerpt);
+        $this->assertSame('Saved. 0 filed; 1 marked no action needed.', app(CaptureService::class)->confirmation($capture)['spoken_confirmation']);
+        $this->get('/intake?review=1')->assertInertia(fn (Assert $page) => $page->has('captures.data', 0));
+        $this->get('/intake')->assertInertia(fn (Assert $page) => $page->has('captures.data', 1));
+        $this->assertDatabaseHas((new FeedNotification)->getTable(), ['capture_id' => $capture->id, 'type' => 'capture_resolved', 'status' => 'read']);
+        $this->post(route('capture-items.retry', $item))->assertSessionHasNoErrors();
+        $this->put(route('capture-items.resolve', $item), ['type' => 'capture_idea', 'body' => 'Do not recreate'])->assertSessionHasNoErrors();
+        $this->assertSame('dismissed', $item->fresh()->status);
+        $this->assertDatabaseCount('tasks', 0);
+        $this->assertDatabaseCount('notes', 0);
+        $this->assertDatabaseCount('action_logs', 0);
+        $this->post(route('capture-items.reopen', $item))->assertSessionHasNoErrors();
+        $this->post(route('capture-items.reopen', $item))->assertSessionHasNoErrors();
+        $this->assertSame('needs_triage', $item->fresh()->status);
+        $this->get('/intake?review=1')->assertInertia(fn (Assert $page) => $page->has('captures.data', 1));
+        $this->assertDatabaseHas((new FeedNotification)->getTable(), ['capture_id' => $capture->id, 'type' => 'capture_review', 'status' => 'unread']);
+        $this->put(route('capture-items.resolve', $item), ['type' => 'capture_idea', 'body' => 'Actually keep this'])->assertSessionHasNoErrors();
+        $this->assertSame('Actually keep this', Note::firstOrFail()->body);
+    }
+
+    public function test_dismissing_one_item_preserves_siblings_and_rejects_already_filed_items(): void
+    {
+        $capture = $this->receive();
+        $this->respond([$this->action(), $this->action(overrides: ['confidence' => .4, 'title' => 'Unclear task']), $this->action(overrides: ['confidence' => .3, 'title' => 'Another decision'])]);
+        $this->process($capture);
+        $items = CaptureItem::orderBy('sequence')->get();
+        $this->post(route('capture-items.dismiss', $items[0]))->assertSessionHasErrors('item');
+        $this->post(route('capture-items.reopen', $items[0]))->assertSessionHasErrors('item');
+        $items[1]->update(['status' => 'failed']);
+        $this->post(route('capture-items.dismiss', $items[1]))->assertSessionHasNoErrors();
+        $this->assertSame('partially_executed', $capture->fresh()->status);
+        $this->assertSame('needs_triage', $items[2]->fresh()->status);
+        $this->post(route('capture-items.dismiss', $items[2]))->assertSessionHasNoErrors();
+        $this->assertSame('executed', $capture->fresh()->status);
+        $this->assertSame('executed', $items[0]->fresh()->status);
+        $this->assertDatabaseCount('tasks', 1);
+        $this->assertDatabaseCount('action_logs', 1);
+    }
+
+    public function test_dismissal_is_owned_and_pending_items_cannot_be_dismissed(): void
+    {
+        $capture = $this->receive();
+        $this->respond([$this->action(overrides: ['confidence' => .4])]);
+        $this->process($capture);
+        $item = CaptureItem::firstOrFail();
+        $item->update(['status' => 'pending']);
+        $this->post(route('capture-items.dismiss', $item))->assertSessionHasErrors('item');
+        $item->update(['status' => 'needs_triage', 'user_id' => User::factory()->create()->id]);
+        $this->post(route('capture-items.dismiss', $item))->assertNotFound();
+        $this->post(route('capture-items.reopen', $item))->assertNotFound();
+        $this->assertSame('needs_triage', $item->fresh()->status);
+    }
+
+    public function test_old_idea_filing_snapshots_can_still_be_undone_but_archived_ideas_are_protected(): void
+    {
+        $capture = $this->receive();
+        $this->respond([$this->action('capture_idea', ['title' => null, 'body' => 'Call the plumber'])]);
+        $this->process($capture);
+        $item = CaptureItem::firstOrFail();
+        $log = ActionLog::firstOrFail();
+        $snapshot = $log->after_snapshot;
+        unset($snapshot['archived_at']);
+        $log->update(['after_snapshot' => $snapshot]);
+        $idea = Note::firstOrFail();
+        $this->patch(route('ideas.archive', $idea))->assertSessionHasNoErrors();
+        $this->post(route('capture-items.undo', $item))->assertSessionHasErrors('undo');
+        $this->assertNotSoftDeleted($idea);
+        // Simulate an untouched legacy record to exercise the older snapshot format.
+        $idea->refresh()->update(['archived_at' => null, 'updated_at' => $snapshot['updated_at']]);
+        $this->post(route('capture-items.undo', $item))->assertSessionHasNoErrors();
+        $this->assertSoftDeleted($idea);
     }
 
     public function test_undo_is_idempotent_and_retry_never_recreates_undone_item(): void

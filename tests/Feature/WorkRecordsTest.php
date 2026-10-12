@@ -261,6 +261,58 @@ class WorkRecordsTest extends TestCase
         $this->get('/bench')->assertInertia(fn (Assert $page) => $page->has('projects.data', 0));
     }
 
+    public function test_ideas_can_be_archived_and_restored_without_deleting_them(): void
+    {
+        $this->post('/ideas', ['body' => 'Maybe later']);
+        $idea = Note::firstOrFail();
+        $this->patch(route('ideas.archive', $idea))->assertSessionHasNoErrors();
+        $archivedAt = $idea->fresh()->archived_at;
+        $this->assertNotNull($archivedAt);
+        $this->assertNotSoftDeleted($idea);
+        $this->travel(1)->minutes();
+        $this->patch(route('ideas.archive', $idea))->assertSessionHasNoErrors();
+        $this->assertTrue($archivedAt->equalTo($idea->fresh()->archived_at));
+        $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->where('filters.status', 'active')->has('ideas.data', 0));
+        $this->get('/ideas?status=archived')->assertInertia(fn (Assert $page) => $page->where('filters.status', 'archived')->where('ideas.data.0.body', 'Maybe later'));
+        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('ideaCount', 0)->where('newIdeaCount', 0));
+        $this->patch(route('ideas.review', $idea))->assertNotFound();
+        $this->post(route('ideas.restore', $idea))->assertSessionHasNoErrors();
+        $this->post(route('ideas.restore', $idea))->assertSessionHasNoErrors();
+        $this->assertNull($idea->fresh()->archived_at);
+        $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->where('ideas.data.0.id', $idea->id));
+        $this->get('/ideas?status=archived')->assertInertia(fn (Assert $page) => $page->has('ideas.data', 0));
+        $this->assertDatabaseCount('tasks', 0);
+    }
+
+    public function test_idea_review_is_idempotent_for_the_local_day_and_can_be_refreshed_later(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-12T04:30:00Z'));
+        $idea = Note::create(['user_id' => $this->owner->id, 'body' => 'Review this', 'kind' => 'thought', 'needs_review' => true]);
+        $this->patch(route('ideas.review', $idea))->assertSessionHasNoErrors();
+        $reviewedAt = $idea->fresh()->reviewed_at;
+        $this->assertFalse($idea->fresh()->needs_review);
+        $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->where('options.today', '2026-10-11')->where('ideas.data.0.reviewed_today', true));
+        $this->travel(10)->minutes();
+        $this->patch(route('ideas.review', $idea))->assertSessionHasNoErrors();
+        $this->assertTrue($reviewedAt->equalTo($idea->fresh()->reviewed_at));
+        $this->travel(1)->hours();
+        $this->get('/ideas')->assertInertia(fn (Assert $page) => $page->where('ideas.data.0.reviewed_today', false));
+        $this->patch(route('ideas.review', $idea))->assertSessionHasNoErrors();
+        $this->assertTrue($idea->fresh()->reviewed_at->gt($reviewedAt));
+    }
+
+    public function test_idea_archive_routes_are_owned_and_do_not_restore_deleted_capture_records(): void
+    {
+        $foreign = Note::create(['user_id' => User::factory()->create()->id, 'body' => 'Private', 'kind' => 'thought', 'archived_at' => now()]);
+        $this->patch(route('ideas.archive', $foreign))->assertNotFound();
+        $this->post(route('ideas.restore', $foreign))->assertNotFound();
+        $this->get('/ideas?status=archived')->assertInertia(fn (Assert $page) => $page->has('ideas.data', 0));
+        $deleted = Note::create(['user_id' => $this->owner->id, 'body' => 'Undone filing', 'kind' => 'thought']);
+        $deleted->delete();
+        $this->patch(route('ideas.archive', $deleted))->assertNotFound();
+        $this->post(route('ideas.restore', $deleted))->assertNotFound();
+    }
+
     public function test_local_dates_handle_evenings_and_both_daylight_saving_transitions(): void
     {
         $dates = app(LocalDate::class);

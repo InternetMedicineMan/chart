@@ -67,6 +67,8 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::put('/capture-items/{item}', [CaptureController::class, 'resolve'])->name('capture-items.resolve');
         Route::post('/capture-items/{item}/retry', [CaptureController::class, 'retryItem'])->name('capture-items.retry');
         Route::post('/capture-items/{item}/undo', [CaptureController::class, 'undo'])->name('capture-items.undo');
+        Route::post('/capture-items/{item}/dismiss', [CaptureController::class, 'dismiss'])->name('capture-items.dismiss');
+        Route::post('/capture-items/{item}/reopen', [CaptureController::class, 'reopen'])->name('capture-items.reopen');
         Route::get('/ideas', [WorkController::class, 'ideas'])->name('ideas');
         Route::get('/more', fn () => Inertia::render('Work/More'))->name('more');
         Route::get('/settings/work', [WorkController::class, 'settings'])->name('work.settings');
@@ -96,6 +98,8 @@ Route::middleware(['auth', config('jetstream.auth_session'), RequireTwoFactorAut
         Route::post('/ideas', [IdeaController::class, 'store'])->name('ideas.store');
         Route::put('/ideas/{idea}', [IdeaController::class, 'update'])->name('ideas.update');
         Route::patch('/ideas/{idea}/review', [IdeaController::class, 'review'])->name('ideas.review');
+        Route::patch('/ideas/{idea}/archive', [IdeaController::class, 'archive'])->name('ideas.archive');
+        Route::post('/ideas/{idea}/restore', [IdeaController::class, 'restore'])->name('ideas.restore');
     });
 
 require __DIR__.'/jetstream.php';
